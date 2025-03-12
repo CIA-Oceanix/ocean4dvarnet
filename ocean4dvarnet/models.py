@@ -8,7 +8,8 @@ import torch.nn.functional as F
 
 
 class Lit4dVarNet(pl.LightningModule):
-    def __init__(self, solver, rec_weight, opt_fn, test_metrics=None, pre_metric_fn=None, norm_stats=None, persist_rw=True):
+    def __init__(self, solver, rec_weight, opt_fn, test_metrics=None, pre_metric_fn=None, norm_stats=None, persist_rw=True,
+                 coeff_loss=50.0, coeff_grad=1000.0, coeff_prior=1.0):
         super().__init__()
         self.solver = solver
         self.register_buffer('rec_weight', torch.from_numpy(rec_weight), persistent=persist_rw)
@@ -17,6 +18,9 @@ class Lit4dVarNet(pl.LightningModule):
         self.opt_fn = opt_fn
         self.metrics = test_metrics or {}
         self.pre_metric_fn = pre_metric_fn or (lambda x: x)
+        self.coeff_loss = coeff_loss
+        self.coeff_grad = coeff_grad
+        self.coeff_prior = coeff_prior
 
     @property
     def norm_stats(self):
@@ -54,7 +58,7 @@ class Lit4dVarNet(pl.LightningModule):
         prior_cost = self.solver.prior_cost(self.solver.init_state(batch, out))
         self.log(f"{phase}_gloss", grad_loss, prog_bar=True, on_step=False, on_epoch=True)
 
-        training_loss = 50 * loss + 1000 * grad_loss + 1.0 * prior_cost
+        training_loss = self.coeff_loss * loss + self.coeff_grad * grad_loss + self.coeff_prior * prior_cost
         return training_loss, out
 
     def base_step(self, batch, phase=""):
@@ -115,7 +119,7 @@ class Lit4dVarNet(pl.LightningModule):
 
 
 class GradSolver(nn.Module):
-    def __init__(self, prior_cost, obs_cost, grad_mod, n_step, lr_grad=0.2, lbd=1.0, **kwargs):
+    def __init__(self, prior_cost, obs_cost, grad_mod, n_step, lr_grad=0.2, **kwargs):
         super().__init__()
         self.prior_cost = prior_cost
         self.obs_cost = obs_cost
@@ -123,7 +127,7 @@ class GradSolver(nn.Module):
 
         self.n_step = n_step
         self.lr_grad = lr_grad
-        self.lbd = lbd
+        self.alpha_prior = torch.nn.Parameter(torch.Tensor([1.]))
 
         self._grad_norm = None
 
@@ -134,7 +138,7 @@ class GradSolver(nn.Module):
         return batch.input.nan_to_num().detach().requires_grad_(True)
 
     def solver_step(self, state, batch, step):
-        var_cost = self.prior_cost(state) + self.lbd**2 * self.obs_cost(state, batch)
+        var_cost = self.alpha_prior**2 * self.prior_cost(state) + self.obs_cost(state, batch)
         grad = torch.autograd.grad(var_cost, state, create_graph=True)[0]
 
         gmod = self.grad_mod(grad)
