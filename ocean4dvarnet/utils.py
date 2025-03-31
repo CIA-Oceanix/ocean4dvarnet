@@ -1,3 +1,38 @@
+"""
+This module provides utility functions for 4D-VarNet, including data preprocessing, 
+optimization configuration, diagnostics, and evaluation metrics.
+
+Functions:
+    pipe: Apply a sequence of functions to an input.
+    kwgetattr: Get an attribute of an object by name.
+    callmap: Apply a list of functions to an input and return the results.
+    half_lr_adam: Configure an Adam optimizer with specific learning rates for model components.
+    cosanneal_lr_adam: Configure an Adam optimizer with cosine annealing learning rate scheduling.
+    cosanneal_lr_lion: Configure a Lion optimizer with cosine annealing learning rate scheduling.
+    triang_lr_adam: Configure an Adam optimizer with triangular cyclic learning rate scheduling.
+    remove_nan: Fill NaN values in a DataArray using Gauss-Seidel interpolation.
+    get_constant_crop: Generate a constant cropping mask for patches.
+    get_cropped_hanning_mask: Generate a cropped Hanning mask for patches.
+    get_triang_time_wei: Generate a triangular time weighting mask for patches.
+    load_enatl: Load ENATL dataset and preprocess it.
+    load_altimetry_data: Load altimetry data and preprocess it.
+    load_dc_data: Placeholder for loading DC data.
+    load_full_natl_data: Load full NATL dataset and preprocess it.
+    rmse_based_scores_from_ds: Compute RMSE-based scores from a dataset.
+    psd_based_scores_from_ds: Compute PSD-based scores from a dataset.
+    rmse_based_scores: Compute RMSE-based scores for reconstruction evaluation.
+    psd_based_scores: Compute PSD-based scores for reconstruction evaluation.
+    diagnostics: Compute diagnostics for a given test domain.
+    diagnostics_from_ds: Compute diagnostics from a dataset.
+    test_osse: Perform OSSE testing and compute metrics.
+    ensemble_metrics: Compute ensemble metrics for multiple checkpoints.
+    add_geo_attrs: Add geographic attributes to a DataArray.
+    vort: Compute vorticity from a DataArray.
+    geo_energy: Compute geostrophic energy from a DataArray.
+    best_ckpt: Retrieve the best checkpoint from an experiment directory.
+    load_cfg: Load configuration files for an experiment.
+"""
+
 import numpy as np
 from omegaconf import OmegaConf
 from pathlib import Path
@@ -15,20 +50,60 @@ import matplotlib.pyplot as plt
 
 
 def pipe(inp, fns):
+    """
+    Apply a sequence of functions to an input.
+
+    Args:
+        inp: The input to process.
+        fns (list): A list of functions to apply.
+
+    Returns:
+        The processed input after applying all functions.
+    """
     for f in fns:
         inp = f(inp)
     return inp
 
 
 def kwgetattr(obj, name):
+    """
+    Get an attribute of an object by name.
+
+    Args:
+        obj: The object to query.
+        name (str): The name of the attribute.
+
+    Returns:
+        The value of the attribute.
+    """
     return getattr(obj, name)
 
 
 def callmap(inp, fns):
+    """
+    Apply a list of functions to an input and return the results.
+
+    Args:
+        inp: The input to process.
+        fns (list): A list of functions to apply.
+
+    Returns:
+        list: A list of results from applying each function.
+    """
     return [fn(inp) for fn in fns]
 
 
 def half_lr_adam(lit_mod, lr):
+    """
+    Configure an Adam optimizer with specific learning rates for model components.
+
+    Args:
+        lit_mod: The Lightning module containing the model.
+        lr (float): The base learning rate.
+
+    Returns:
+        torch.optim.Adam: The configured optimizer.
+    """
     return torch.optim.Adam(
         [
             {"params": lit_mod.solver.grad_mod.parameters(), "lr": lr},
@@ -38,7 +113,19 @@ def half_lr_adam(lit_mod, lr):
     )
 
 
-def cosanneal_lr_adam(lit_mod, lr, T_max=100, weight_decay=0.):
+def cosanneal_lr_adam(lit_mod, lr, t_max=100, weight_decay=0.):
+    """
+    Configure an Adam optimizer with cosine annealing learning rate scheduling.
+
+    Args:
+        lit_mod: The Lightning module containing the model.
+        lr (float): The base learning rate.
+        t_max (int): Maximum number of iterations for the scheduler.
+        weight_decay (float): Weight decay for the optimizer.
+
+    Returns:
+        dict: A dictionary containing the optimizer and scheduler.
+    """
     opt = torch.optim.Adam(
         [
             {"params": lit_mod.solver.grad_mod.parameters(), "lr": lr},
@@ -48,11 +135,24 @@ def cosanneal_lr_adam(lit_mod, lr, T_max=100, weight_decay=0.):
     )
     return {
         "optimizer": opt,
-        "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=T_max),
+        "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(
+            opt, T_max=t_max
+        ),
     }
 
 
-def cosanneal_lr_lion(lit_mod, lr, T_max=100):
+def cosanneal_lr_lion(lit_mod, lr, t_max=100):
+    """
+    Configure a Lion optimizer with cosine annealing learning rate scheduling.
+
+    Args:
+        lit_mod: The Lightning module containing the model.
+        lr (float): The base learning rate.
+        t_max (int): Maximum number of iterations for the scheduler.
+
+    Returns:
+        dict: A dictionary containing the optimizer and scheduler.
+    """
     import lion_pytorch
     opt = lion_pytorch.Lion(
         [
@@ -62,11 +162,23 @@ def cosanneal_lr_lion(lit_mod, lr, T_max=100):
     )
     return {
         "optimizer": opt,
-        "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=T_max),
+        "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, t_max=t_max),
     }
 
 
 def triang_lr_adam(lit_mod, lr_min=5e-5, lr_max=3e-3, nsteps=200):
+    """
+    Configure an Adam optimizer with triangular cyclic learning rate scheduling.
+
+    Args:
+        lit_mod: The Lightning module containing the model.
+        lr_min (float): Minimum learning rate.
+        lr_max (float): Maximum learning rate.
+        nsteps (int): Number of steps for the triangular cycle.
+
+    Returns:
+        dict: A dictionary containing the optimizer and scheduler.
+    """
     opt = torch.optim.Adam(
         [
             {"params": lit_mod.solver.grad_mod.parameters(), "lr": lr_max},
@@ -89,6 +201,15 @@ def triang_lr_adam(lit_mod, lr_min=5e-5, lr_max=3e-3, nsteps=200):
 
 
 def remove_nan(da):
+    """
+    Fill NaN values in a DataArray using Gauss-Seidel interpolation.
+
+    Args:
+        da (xarray.DataArray): The input DataArray.
+
+    Returns:
+        xarray.DataArray: The DataArray with NaN values filled.
+    """
     da["lon"] = da.lon.assign_attrs(units="degrees_east")
     da["lat"] = da.lat.assign_attrs(units="degrees_north")
 
@@ -99,6 +220,17 @@ def remove_nan(da):
 
 
 def get_constant_crop(patch_dims, crop, dim_order=["time", "lat", "lon"]):
+    """
+    Generate a constant cropping mask for patches.
+
+    Args:
+        patch_dims (dict): Dimensions of the patch.
+        crop (dict): Crop sizes for each dimension.
+        dim_order (list): Order of dimensions.
+
+    Returns:
+        numpy.ndarray: A mask with cropped regions set to 0 and others to 1.
+    """
     patch_weight = np.zeros([patch_dims[d] for d in dim_order], dtype="float32")
     mask = tuple(
         slice(crop[d], -crop[d]) if crop.get(d, 0) > 0 else slice(None, None)
@@ -109,15 +241,34 @@ def get_constant_crop(patch_dims, crop, dim_order=["time", "lat", "lon"]):
 
 
 def get_cropped_hanning_mask(patch_dims, crop, **kwargs):
+    """
+    Generate a cropped Hanning mask for patches.
+
+    Args:
+        patch_dims (dict): Dimensions of the patch.
+        crop (dict): Crop sizes for each dimension.
+
+    Returns:
+        numpy.ndarray: The cropped Hanning mask.
+    """
     pw = get_constant_crop(patch_dims, crop)
-
     t_msk = kornia.filters.get_hanning_kernel1d(patch_dims["time"])
-
     patch_weight = t_msk[:, None, None] * pw
     return patch_weight.cpu().numpy()
 
 
 def get_triang_time_wei(patch_dims, offset=0, **crop_kw):
+    """
+    Generate a triangular time weighting mask for patches.
+
+    Args:
+        patch_dims (dict): Dimensions of the patch.
+        offset (int): Offset for the triangular weighting.
+        crop_kw (dict): Additional cropping parameters.
+
+    Returns:
+        numpy.ndarray: The triangular time weighting mask.
+    """
     pw = get_constant_crop(patch_dims, **crop_kw)
     return np.fromfunction(
         lambda t, *a: (
@@ -128,9 +279,21 @@ def get_triang_time_wei(patch_dims, offset=0, **crop_kw):
 
 
 def load_enatl(*args, obs_from_tgt=True, **kwargs):
+    """
+    Load and preprocess the ENATL dataset.
+
+    Args:
+        obs_from_tgt (bool): Whether to use target data as observations.
+
+    Returns:
+        xarray.DataArray: The preprocessed ENATL dataset.
+    """
     # ds = xr.open_dataset('../sla-data-registry/qdata/enatl_wo_tide.nc')
     # print(ds)
-    # return ds.rename(nadir_obs='input', ssh='tgt').to_array().transpose('variable', 'time', 'lat', 'lon').sortby('variable')
+    # return ds.rename(nadir_obs='input', ssh='tgt')\
+    #     .to_array()\
+    #     .transpose('variable', 'time', 'lat', 'lon')\
+    #     .sortby('variable')
     ssh = xr.open_zarr('../sla-data-registry/enatl_preproc/truth_SLA_SSH_NATL60.zarr/').ssh
     nadirs = xr.open_zarr('../sla-data-registry/enatl_preproc/SLA_SSH_5nadirs.zarr/').ssh
     ssh = ssh.interp(
@@ -139,13 +302,27 @@ def load_enatl(*args, obs_from_tgt=True, **kwargs):
     )
     nadirs = nadirs.interp(time=ssh.time, method='nearest')\
         .interp(lat=ssh.lat, lon=ssh.lon, method='zero')
-    ds = xr.Dataset(dict(input=nadirs, tgt=(ssh.dims, ssh.values)), nadirs.coords)
+    ds = xr.Dataset(
+        {"input": nadirs, "tgt": (ssh.dims, ssh.values)},
+        nadirs.coords
+    )
     if obs_from_tgt:
         ds = ds.assign(input=ds.tgt.transpose(*ds.input.dims).where(np.isfinite(ds.input), np.nan))
     return ds.transpose('time', 'lat', 'lon').to_array().load().sortby('variable')
 
 
+
 def load_altimetry_data(path, obs_from_tgt=False):
+    """
+    Load and preprocess altimetry data.
+
+    Args:
+        path (str): Path to the altimetry dataset.
+        obs_from_tgt (bool): Whether to use target data as observations.
+
+    Returns:
+        xarray.DataArray: The preprocessed altimetry dataset.
+    """
     ds = (
         xr.open_dataset(path)
         # .assign(ssh=lambda ds: ds.ssh.coarsen(lon=2, lat=2).mean().interp(lat=ds.lat, lon=ds.lon))
@@ -166,9 +343,18 @@ def load_altimetry_data(path, obs_from_tgt=False):
     )
 
 
-def load_dc_data(**kwargs):
-    path_gt = "../sla-data-registry/NATL60/NATL/ref_new/NATL60-CJM165_NATL_ssh_y2013.1y.nc",
-    path_obs = "NATL60/NATL/data_new/dataset_nadir_0d.nc"
+def load_dc_data():
+    """
+    Placeholder function for loading DC data.
+
+    Args:
+        kwargs: Additional arguments.
+
+    Returns:
+        None
+    """
+    # path_gt = "../sla-data-registry/NATL60/NATL/ref_new/NATL60-CJM165_NATL_ssh_y2013.1y.nc",
+    # path_obs = "NATL60/NATL/data_new/dataset_nadir_0d.nc"
 
 
 def load_full_natl_data(
@@ -176,8 +362,20 @@ def load_full_natl_data(
     path_gt="../sla-data-registry/NATL60/NATL/ref_new/NATL60-CJM165_NATL_ssh_y2013.1y.nc",
     obs_var='five_nadirs',
     gt_var='ssh',
-    **kwargs
+    # **kwargs
 ):
+    """
+    Load and preprocess the full NATL dataset.
+
+    Args:
+        path_obs (str): Path to the observation dataset.
+        path_gt (str): Path to the ground truth dataset.
+        obs_var (str): Observation variable name.
+        gt_var (str): Ground truth variable name.
+
+    Returns:
+        xarray.DataArray: The preprocessed NATL dataset.
+    """
     inp = xr.open_dataset(path_obs)[obs_var]
     gt = (
         xr.open_dataset(path_gt)[gt_var]
@@ -185,10 +383,24 @@ def load_full_natl_data(
         .sel(lat=inp.lat, lon=inp.lon, method="nearest")
     )
 
-    return xr.Dataset(dict(input=inp, tgt=(gt.dims, gt.values)), inp.coords).to_array().sortby('variable')
+    return xr.Dataset(
+        {"input": inp, "tgt": (gt.dims, gt.values)},
+        inp.coords
+    ).to_array().sortby("variable")
 
 
 def rmse_based_scores_from_ds(ds, ref_variable='tgt', study_variable='out'):
+    """
+    Compute RMSE-based scores from a dataset.
+
+    Args:
+        ds (xarray.Dataset): The dataset containing the reference and study variables.
+        ref_variable (str): The name of the reference variable.
+        study_variable (str): The name of the study variable.
+
+    Returns:
+        list: A list containing RMSE-based scores.
+    """
     try:
         return rmse_based_scores(ds[study_variable], ds[ref_variable])[2:]
     except Exception:
@@ -196,6 +408,17 @@ def rmse_based_scores_from_ds(ds, ref_variable='tgt', study_variable='out'):
 
 
 def psd_based_scores_from_ds(ds, ref_variable='tgt', study_variable='out'):
+    """
+    Compute PSD-based scores from a dataset.
+
+    Args:
+        ds (xarray.Dataset): The dataset containing the reference and study variables.
+        ref_variable (str): The name of the reference variable.
+        study_variable (str): The name of the study variable.
+
+    Returns:
+        list: A list containing PSD-based scores.
+    """
     try:
         return psd_based_scores(ds[study_variable], ds[ref_variable])[1:]
     except Exception:
@@ -203,6 +426,16 @@ def psd_based_scores_from_ds(ds, ref_variable='tgt', study_variable='out'):
 
 
 def rmse_based_scores(da_rec, da_ref):
+    """
+    Compute RMSE-based scores for reconstruction evaluation.
+
+    Args:
+        da_rec (xarray.DataArray): The reconstructed data.
+        da_ref (xarray.DataArray): The reference data.
+
+    Returns:
+        tuple: A tuple containing RMSE-based scores.
+    """
     rmse_t = (
         1.0
         - (((da_rec - da_ref) ** 2).mean(dim=("lon", "lat"))) ** 0.5
@@ -224,6 +457,16 @@ def rmse_based_scores(da_rec, da_ref):
 
 
 def psd_based_scores(da_rec, da_ref):
+    """
+    Compute PSD-based scores for reconstruction evaluation.
+
+    Args:
+        da_rec (xarray.DataArray): The reconstructed data.
+        da_ref (xarray.DataArray): The reference data.
+
+    Returns:
+        tuple: A tuple containing PSD-based scores and resolved wavelengths.
+    """
     err = da_rec - da_ref
     err["time"] = (err.time - err.time[0]) / np.timedelta64(1, "D")
     signal = da_ref
@@ -263,11 +506,31 @@ def psd_based_scores(da_rec, da_ref):
 
 
 def diagnostics(lit_mod, test_domain):
+    """
+    Compute diagnostics for a given test domain.
+
+    Args:
+        lit_mod: The Lightning module containing the model.
+        test_domain (dict): The test domain to evaluate.
+
+    Returns:
+        pandas.Series: A series containing diagnostic metrics.
+    """
     test_data = lit_mod.test_data.sel(test_domain)
     return diagnostics_from_ds(test_data, test_domain)
 
 
 def diagnostics_from_ds(test_data, test_domain):
+    """
+    Compute diagnostics from a dataset.
+
+    Args:
+        test_data (xarray.Dataset): The test data.
+        test_domain (dict): The test domain to evaluate.
+
+    Returns:
+        pandas.Series: A series containing diagnostic metrics.
+    """
     test_data = test_data.sel(test_domain)
     metrics = {
         "RMSE (m)": test_data.pipe(lambda ds: (ds.out - ds.tgt))
@@ -292,6 +555,20 @@ def diagnostics_from_ds(test_data, test_domain):
 
 
 def test_osse(trainer, lit_mod, osse_dm, osse_test_domain, ckpt, diag_data_dir=None):
+    """
+    Perform OSSE (Observing System Simulation Experiment) testing and compute metrics.
+
+    Args:
+        trainer (pl.Trainer): The PyTorch Lightning trainer instance.
+        lit_mod (pl.LightningModule): The Lightning module to test.
+        osse_dm (pl.LightningDataModule): The datamodule for OSSE testing.
+        osse_test_domain (dict): The test domain for evaluation.
+        ckpt (str): Path to the checkpoint to load.
+        diag_data_dir (Path, optional): Directory to save diagnostic data.
+
+    Returns:
+        pandas.Series: A series containing OSSE metrics.
+    """
     lit_mod.norm_stats = osse_dm.norm_stats()
     trainer.test(lit_mod, datamodule=osse_dm, ckpt_path=ckpt)
     osse_tdat = lit_mod.test_data[['out', 'ssh']]
@@ -311,6 +588,19 @@ def test_osse(trainer, lit_mod, osse_dm, osse_test_domain, ckpt, diag_data_dir=N
 
 
 def ensemble_metrics(trainer, lit_mod, ckpt_list, dm, save_path):
+    """
+    Compute ensemble metrics for multiple checkpoints.
+
+    Args:
+        trainer (pl.Trainer): The PyTorch Lightning trainer instance.
+        lit_mod (pl.LightningModule): The Lightning module to test.
+        ckpt_list (list): List of checkpoint paths to evaluate.
+        dm (pl.LightningDataModule): The datamodule for testing.
+        save_path (str): Path to save the metrics and ensemble outputs.
+
+    Returns:
+        None
+    """
     metrics = []
     test_data = xr.Dataset()
     for i, ckpt in enumerate(ckpt_list):
@@ -325,7 +615,14 @@ def ensemble_metrics(trainer, lit_mod, ckpt_list, dm, save_path):
         lx, lt = psd_based_scores(lit_mod.test_data.out, lit_mod.test_data.ssh)[1:]
         mu, sig = rmse_based_scores(lit_mod.test_data.out, lit_mod.test_data.ssh)[2:]
 
-        metrics.append(dict(ckpt=ckpt, rmse=rmse, lx=lx, lt=lt, mu=mu, sig=sig))
+        metrics.append({
+            "ckpt": ckpt,
+            "rmse": rmse,
+            "lx": lx,
+            "lt": lt,
+            "mu": mu,
+            "sig": sig,
+        })
 
         if i == 0:
             test_data = lit_mod.test_data
@@ -344,12 +641,30 @@ def ensemble_metrics(trainer, lit_mod, ckpt_list, dm, save_path):
 
 
 def add_geo_attrs(da):
+    """
+    Add geographic attributes (longitude and latitude units) to a DataArray.
+
+    Args:
+        da (xarray.DataArray): The input DataArray.
+
+    Returns:
+        xarray.DataArray: The DataArray with geographic attributes added.
+    """
     da["lon"] = da.lon.assign_attrs(units="degrees_east")
     da["lat"] = da.lat.assign_attrs(units="degrees_north")
     return da
 
 
 def vort(da):
+    """
+    Compute the vorticity from a DataArray.
+
+    Args:
+        da (xarray.DataArray): The input DataArray.
+
+    Returns:
+        xarray.DataArray: The vorticity computed from the input data.
+    """
     return mpcalc.vorticity(
         *mpcalc.geostrophic_wind(
             da.pipe(add_geo_attrs).assign_attrs(units="m").metpy.quantify()
@@ -358,10 +673,28 @@ def vort(da):
 
 
 def geo_energy(da):
+    """
+    Compute the geostrophic energy from a DataArray.
+
+    Args:
+        da (xarray.DataArray): The input DataArray.
+
+    Returns:
+        xarray.DataArray: The geostrophic energy computed from the input data.
+    """
     return np.hypot(*mpcalc.geostrophic_wind(da.pipe(add_geo_attrs))).metpy.dequantify()
 
 
 def best_ckpt(xp_dir):
+    """
+    Retrieve the best checkpoint from an experiment directory.
+
+    Args:
+        xp_dir (str): Path to the experiment directory.
+
+    Returns:
+        str: Path to the best checkpoint file.
+    """
     _, xpn = load_cfg(xp_dir)
     if xpn is None:
         return None
@@ -375,6 +708,15 @@ def best_ckpt(xp_dir):
 
 
 def load_cfg(xp_dir):
+    """
+    Load configuration files for an experiment.
+
+    Args:
+        xp_dir (str): Path to the experiment directory.
+
+    Returns:
+        tuple: A tuple containing the configuration and the experiment name.
+    """
     hydra_cfg = OmegaConf.load(Path(xp_dir) / ".hydra/hydra.yaml").hydra
     cfg = OmegaConf.load(Path(xp_dir) / ".hydra/config.yaml")
     OmegaConf.register_new_resolver(
