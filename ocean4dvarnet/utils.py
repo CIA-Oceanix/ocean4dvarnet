@@ -44,10 +44,9 @@ import torch
 import pyinterp
 import pyinterp.fill
 import pyinterp.backends.xarray
-import data
 import xarray as xr
 import matplotlib.pyplot as plt
-
+from . import data
 
 def pipe(inp, fns):
     """

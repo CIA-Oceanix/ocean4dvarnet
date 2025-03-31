@@ -46,7 +46,7 @@ class XrDataset(torch.utils.data.Dataset):
     the batches passed to self.reconstruct should:
         - have the last dims correspond to the patch dims in same order
 
-            Attributes:
+    Attributes:
         da (xarray.DataArray): The input data array.
         patch_dims (dict): Dimensions and sizes of patches to extract.
         domain_limits (dict): Limits for selecting a subset of the domain.
@@ -177,13 +177,13 @@ class XrDataset(torch.utils.data.Dataset):
     def reconstruct(self, batches, weight=None):
         """
         Reconstruct the original data array from patches.
-        Takes as input a list of np.ndarray of dimensions (b, *, *patch_dims)
+        Takes as input a list of np.ndarray of dimensions (b, \\*, \\*patch_dims)
 
-                Args:
+        Args:
             batches (list): List of patches (torch tensor) corresponding to batches without shuffle.
-            weight (np.ndarray, optional): tensor of size patch_dims corresponding to the weight of a prediction 
-               depending on the position on the patch (default to ones everywhere) overlapping patches will
-               be averaged with weighting
+            weight (np.ndarray, optional): tensor of size patch_dims corresponding to the weight of a prediction
+                depending on the position on the patch (default to ones everywhere) overlapping patches will
+                be averaged with weighting
 
         Returns:
             xarray.DataArray: Reconstructed data array. A stitched xarray.DataArray with the coords of patch_dims
