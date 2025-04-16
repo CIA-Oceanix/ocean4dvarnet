@@ -1,4 +1,4 @@
-# Welcome to ocean4DVarNet documentation! 
+# Welcome to ocean4DVarNet ! 
 
 
 The full documentation of the package available at : [https://cia-oceanix.github.io/ocean4dvarnet/](https://cia-oceanix.github.io/ocean4dvarnet/)
@@ -43,6 +43,15 @@ Another package is available, containing extended functionality : models, datalo
 If you want to add specific models, data loaders, utilities, etc., the best way to do so is to contribute to the [Ocean4DVarnet-contrib](https://github.com/CIA-Oceanix/ocean4dvarnet-contrib) project.
 
 If you want to contribute to the core Ocean4DVarnet Package, please follow the informations in the [contributing](./contributing.md) section.
+
+---
+## Useful links
+
+- Project getting started : [https://github.com/CIA-Oceanix/4dvarnet-starter](https://github.com/CIA-Oceanix/4dvarnet-starter)
+- 4DVarNet papers:
+	- Fablet, R.; Amar, M. M.; Febvre, Q.; Beauchamp, M.; Chapron, B. END-TO-END PHYSICS-INFORMED REPRESENTATION LEARNING FOR SA℡LITE OCEAN REMOTE SENSING DATA: APPLICATIONS TO SA℡LITE ALTIMETRY AND SEA SURFACE CURRENTS. ISPRS Annals of the Photogrammetry, Remote Sensing and Spatial Information Sciences 2021, V-3–2021, 295–302. [https://doi.org/10.5194/isprs-annals-v-3-2021-295-2021](https://doi.org/10.5194/isprs-annals-v-3-2021-295-2021).
+	- Fablet, R.; Chapron, B.; Drumetz, L.; Mmin, E.; Pannekoucke, O.; Rousseau, F. Learning Variational Data Assimilation Models and Solvers. Journal of Advances in Modeling Earth Systems n/a (n/a), e2021MS002572. [https://doi.org/10.1029/2021MS002572](https://doi.org/10.1029/2021MS002572).
+	- Fablet, R.; Beauchamp, M.; Drumetz, L.; Rousseau, F. Joint Interpolation and Representation Learning for Irregularly Sampled Satellite-Derived Geophysical Fields. Frontiers in Applied Mathematics and Statistics 2021, 7. [https://doi.org/10.3389/fams.2021.655224](https://doi.org/10.3389/fams.2021.655224).
 
 ---
 ## License

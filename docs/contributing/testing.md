@@ -3,12 +3,11 @@
 
 To run the test suite after installing Ocean4DVarNet : 
 
-Install `dev` dependencies in the Ocean4DVarNet directory :
+- Install `dev` dependencies in the Ocean4DVarNet directory :
 ``` bash
 pip install .[dev]
 ```
-
-And the run the Unit tests:
+- And then run the Unit tests:
 ```
 make test
 ```

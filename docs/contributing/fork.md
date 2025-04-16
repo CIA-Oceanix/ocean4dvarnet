@@ -2,8 +2,11 @@
 
 When working with a fork, follow these steps to set up your local development environment:
 
+If you need help with git, have a look at the [Git QuickSheet](./git-guicksheet.md).
+
+
 ---
-## Fork the repository: Create your own copy of the repository on GitHub.**
+## **Fork the repository: Create your own copy of the repository on GitHub.**
 
 1. On GitHub, navigate to the Ocean4DVarNet repository : [https://github.com/CIA-Oceanix/ocean4dvarnet](https://github.com/CIA-Oceanix/ocean4dvarnet)
 2. On the top-right corner of the page, click `Fork`.
@@ -22,7 +25,7 @@ More informations following this [GitHub forking a repository tutorial](https://
 
 
 ---
-## Clone your fork: Download your forked repository to your local machine
+## **Clone your fork: Download your forked repository to your local machine**
 
 1. On GitHub, navigate to your fork of the Ocean4DVarNet repository, click on `<>Code` and get the SSH url.
 2. Clone your fork of the Ocean4DVarNet repository on you local machine
@@ -44,7 +47,7 @@ $ cd my-ocean4dvarnet
 More informations following [this section of the tutorial](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo#cloning-your-forked-repository).
 
 ---
-## Keep your fork Up to date : Configuring Git to sync your fork with the upstream repository
+## **Keep your fork Up to date : Configuring Git to sync your fork with the upstream repository**
 
 
 1. Display informations about the remote connexion of your fork repository : it is not connected to the upstream repository anymore, so it can not fetch updates.
@@ -87,5 +90,5 @@ $ git fetch upstream main
 
 With this configuration, you can still fetch updates from the upstream repository but won’t be able to accidentally push changes to it.
 
-More informations by following [this section](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo#configuring-git-to-sync-your-fork-with-the-upstream-repository).
+More informations by following [this section of the tutorial](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo#configuring-git-to-sync-your-fork-with-the-upstream-repository).
 

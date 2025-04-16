@@ -3,7 +3,7 @@
 Python Version: we require at least Python 3.9.
 
 ---
-# Environment Installation
+## **Environment Installation**
 
 We currently do not provide a conda build package of Ocean4DVarNet but only a pypi package.
 
@@ -25,7 +25,7 @@ More informations about how to deploy a full environment can be found in the [De
 
 
 ---
-## Instructions
+## **Instructions**
 
 To install the package and his dependencies with `pip`, you can use the following command:
 ``` bash

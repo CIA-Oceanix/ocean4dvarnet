@@ -1,0 +1,73 @@
+site_name: Ocean4DVarNet Documentation
+site_url: https://cia-oceanix.github.io/ocean4dvarnet/
+repo_url: https://github.com/cia-oceanix/ocean4dvarnet
+copyright: "Copyright &copy; IMT Atlantique/OceaniX. This software is governed by the CeCILL-C license under French law and abiding by the rules of distribution of free software."
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+    - navigation.footer
+
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: ["ocean4dvarnet", "."]
+          options:
+            show_source: true
+            docstring_style: google
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.tabbed
+  - pymdownx.emoji
+  - attr_list
+  - md_in_html
+
+nav:
+  - Home: index.md
+  - Concepts: concepts.md
+  - User Guide:
+      - Migrating: user-guide/migrate-from-src.md
+  #     - User Guide: user-guide/index.md
+  #     - Quickstart: user-guide/quickstart.md
+  #     - Examples: user-guide/examples.md
+  #     - Configuration: user-guide/configuration.md
+  #     - Data: user-guide/data.md
+  #     - Preprocessing: user-guide/preprocessing.md
+  #     - Training: user-guide/training.md
+  #     - Evaluation: user-guide/evaluation.md
+  #     - Inference: user-guide/inference.md
+  - Installing: installing.md
+  - Issues: issues.md
+  - Contributing:
+      - Contributing: contributing.md
+      - Workflow: contributing/workflow.md
+      - Guidelines: contributing/guidelines.md
+      - Fork repository: contributing/fork.md
+      - Python Environment: contributing/pytorch-mamba-env.md
+      - Development environment: contributing/dev-env-set-up.md
+      - Documentation: contributing/documentation.md
+      - Code Quality and Security: contributing/code-quality.md
+      - Testing: contributing/testing.md
+      - Git QuickSheet: contributing/git-quicksheet.md
+
+  - Code Documentation:
+      - data: code-doc/data.md
+      - models: code-doc/models.md
+      - train: code-doc/train.md
+      - utils: code-doc/utils.md
+      # - evaluate: code-doc/evaluate.md
+      # - plot: code-doc/plot.md
+      # - process: code-doc/process.md
+  - Related Projects: related-projects.md
