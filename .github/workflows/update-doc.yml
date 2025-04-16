@@ -1,3 +1,4 @@
+
 ---
 name: Update Documentation
 
@@ -19,8 +20,11 @@ jobs:
 
       - name: Install doc dependecies 
         run: |
-          echo "Installing doc dependencies"
-          pip install -e .[doc]
+          pip install --upgrade pip
+          pip install tomlq
+          PIP_DOC_PACKAGE=$(tomlq -r '.project."optional-dependencies".doc | join(" ")' pyproject.toml)
+          echo "Installing doc dependencies : $PIP_DOC_PACKAGE"
+          pip install $PIP_DOC_PACKAGE
 
       - name: Deploy MkDocs to GitHub Pages
         run: |

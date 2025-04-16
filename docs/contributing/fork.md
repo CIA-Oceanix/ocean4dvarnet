@@ -2,7 +2,7 @@
 
 When working with a fork, follow these steps to set up your local development environment:
 
-If you need help with git, have a look at the [Git QuickSheet](./git-guicksheet.md).
+If you need help with git, have a look at the [Git QuickSheet](./git-quicksheet.md).
 
 
 ---
