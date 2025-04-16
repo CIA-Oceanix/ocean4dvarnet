@@ -1,8 +1,6 @@
 # Welcome to ocean4DVarNet documentation! 
 
 
-The full documentation of the package available at : [https://cia-oceanix.github.io/ocean4dvarnet/](https://cia-oceanix.github.io/ocean4dvarnet/)
-
 ---
 ## About ocean4DVarNet
 
@@ -21,8 +19,7 @@ pip install ocean4dvarnet
 *Get more information in the [installing](./installing.md) section*
 
 ---
-##  Usage
-
+##  Usage 
 ``` python
 import ocean4dvarnet
 ``` 

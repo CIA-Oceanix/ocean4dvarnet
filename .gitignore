@@ -38,4 +38,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+miniforge3/
 
+# Mkdocs
+site/
