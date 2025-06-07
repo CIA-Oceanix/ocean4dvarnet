@@ -1,5 +1,6 @@
 # Welcome to ocean4DVarNet ! 
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15615389.svg)](https://doi.org/10.5281/zenodo.15615389)
 
 The full documentation of the package available at : [https://cia-oceanix.github.io/ocean4dvarnet/](https://cia-oceanix.github.io/ocean4dvarnet/)
 

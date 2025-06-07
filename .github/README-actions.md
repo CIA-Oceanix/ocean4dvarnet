@@ -5,7 +5,7 @@
 ## Workflows
 
 - **release** : publish a code release
-  - create a relesae on Github
+  - create a release on Github
   - publish a releas on pypi.org
 - **update-doc** : update documentation
 

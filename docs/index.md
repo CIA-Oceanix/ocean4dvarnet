@@ -1,5 +1,6 @@
 # Welcome to ocean4DVarNet documentation! 
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15615389.svg)](https://doi.org/10.5281/zenodo.15615389)
 
 ---
 ## About ocean4DVarNet
