@@ -67,12 +67,6 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
-
-# pypi does not support pyproject.toml 
-# the configuration is in the .pypirc
-#[tool.pypirc]
-
-
 [tool.pylint.format]
 max-line-length = 120
 
