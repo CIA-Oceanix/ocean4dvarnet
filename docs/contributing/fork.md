@@ -83,9 +83,19 @@ $ git remote -v
 
 Now, you can keep your fork synced with the upstream repository with 
 ``` bash
+# Get changes from upstream repository
 $ git fetch upstream main
 > From https://github.com/CIA-Oceanix/ocean4dvarnet
 > * branch            main       -> FETCH_HEAD
+
+# Work with main branch
+git checkout main
+
+# Merge upstream on main branch
+git merge upstream/main
+
+# Push main branch
+git push origin main
 ```
 
 With this configuration, you can still fetch updates from the upstream repository but won’t be able to accidentally push changes to it.
