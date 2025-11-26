@@ -6,7 +6,10 @@
 Contributions to Ocean4DVarnet.
 
 - [https://pypi.org/project/ocean4dvarnet-contrib/](https://pypi.org/project/ocean4dvarnet-contrib/)
-- [https://github.com/CIA-Oceanix/ocean4dvarnet-contrib](https://github.com/CIA-Oceanix/ocean4dvarnet-contrib)
+- ocean4dvarnet-contrib :
+    - Full documentation : [https://cia-oceanix.github.io/ocean4dvarnet-contrib/](https://cia-oceanix.github.io/ocean4dvarnet-contrib/)
+    - Github Repository :  [https://github.com/CIA-Oceanix/ocean4dvarnet-contrib](https://github.com/CIA-Oceanix/ocean4dvarnet-contrib)
+
 
 ---
 ## **4DVarNet-Starter**

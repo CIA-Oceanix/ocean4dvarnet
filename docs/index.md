@@ -32,7 +32,10 @@ import ocean4dvarnet
 
 This package contains the model's main functions. 
 
-Another package is available, containing extended functionality : models, dataloader, etc. ... : Ocean4DVarnet-contrib : [https://github.com/CIA-Oceanix/ocean4dvarnet-contrib](https://github.com/CIA-Oceanix/ocean4dvarnet-contrib)
+A repository is available, containing extended functionality : models, dataloader, etc. ... :
+
+- Full documentation : [https://cia-oceanix.github.io/ocean4dvarnet-contrib/](https://cia-oceanix.github.io/ocean4dvarnet-contrib/)
+- Github Repository :  [https://github.com/CIA-Oceanix/ocean4dvarnet-contrib](https://github.com/CIA-Oceanix/ocean4dvarnet-contrib)
 
 
 ---

@@ -39,7 +39,7 @@ python -m pip install ocean4dvarnet
 
 You can also get a zip or tgz archive of the package from github repository https://github.com/CIA-Oceanix/ocean4dvarnet/releases
 ``` bash
-pip install ocean4dvarnet-contrib-x.x.x.tar.gz
+pip install ocean4dvarnet-x.x.x.tar.gz
 ```
 
 And you can use the last development version directly from github repository
