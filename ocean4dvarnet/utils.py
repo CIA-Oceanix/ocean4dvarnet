@@ -199,37 +199,7 @@ def triang_lr_adam(lit_mod, lr_min=5e-5, lr_max=3e-3, nsteps=200):
         ),
     }
 
-
-def remove_nan(da):
-    """
-    Fill NaN values in a DataArray using Gauss-Seidel interpolation.
-    Version proche de pyinterp.fill.gauss_seidel.
-
-    Args:
-        da (xarray.DataArray): The input DataArray.
-
-    Returns:
-        xarray.DataArray: The DataArray with NaN values filled.
-    """
-    da["lon"] = da.lon.assign_attrs(units="degrees_east")
-    da["lat"] = da.lat.assign_attrs(units="degrees_north")
-    
-    da_filled = da.copy()
-    
-    # Transposer pour avoir (lon, lat, time)
-    data = da.transpose("lon", "lat", "time").values.copy()
-    
-    # Appliquer Gauss-Seidel sur chaque tranche temporelle
-    for t in range(data.shape[2]):
-        data[:, :, t] = gauss_seidel_fill(data[:, :, t])
-    
-    # Réassigner les données
-    da_filled.transpose("lon", "lat", "time")[:, :] = data
-    
-    return da_filled
-
-
-def gauss_seidel_fill(grid, max_iterations=1000, tolerance=1e-5):
+def _gauss_seidel_fill(grid, max_iterations=1000, tolerance=1e-5):
     """
     Fill NaN values using Gauss-Seidel iterative method.
     
@@ -290,6 +260,37 @@ def gauss_seidel_fill(grid, max_iterations=1000, tolerance=1e-5):
             break
     
     return grid
+
+
+
+def remove_nan(da):
+    """
+    Fill NaN values in a DataArray using Gauss-Seidel interpolation.
+    Version proche de pyinterp.fill.gauss_seidel.
+
+    Args:
+        da (xarray.DataArray): The input DataArray.
+
+    Returns:
+        xarray.DataArray: The DataArray with NaN values filled.
+    """
+    da["lon"] = da.lon.assign_attrs(units="degrees_east")
+    da["lat"] = da.lat.assign_attrs(units="degrees_north")
+    
+    da_filled = da.copy()
+    
+    # Transposer pour avoir (lon, lat, time)
+    data = da.transpose("lon", "lat", "time").values.copy()
+    
+    # Appliquer Gauss-Seidel sur chaque tranche temporelle
+    for t in range(data.shape[2]):
+        data[:, :, t] = _gauss_seidel_fill(data[:, :, t])
+    
+    # Réassigner les données
+    da_filled.transpose("lon", "lat", "time")[:, :] = data
+    
+    return da_filled
+
 
 
 def get_constant_crop(patch_dims, crop, dim_order=["time", "lat", "lon"]):
