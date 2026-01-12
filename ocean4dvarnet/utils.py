@@ -12,10 +12,12 @@ Functions:
     cosanneal_lr_adam: Configure an Adam optimizer with cosine annealing learning rate scheduling.
     cosanneal_lr_lion: Configure a Lion optimizer with cosine annealing learning rate scheduling.
     triang_lr_adam: Configure an Adam optimizer with triangular cyclic learning rate scheduling.
+    remove_nan: Fill NaN values in a DataArray using Gauss-Seidel interpolation.
     get_constant_crop: Generate a constant cropping mask for patches.
     get_cropped_hanning_mask: Generate a cropped Hanning mask for patches.
     get_triang_time_wei: Generate a triangular time weighting mask for patches.
     load_enatl: Load ENATL dataset and preprocess it.
+    load_altimetry_data: Load altimetry data and preprocess it.
     load_dc_data: Load DC data (currently a placeholder function).
     load_full_natl_data: Load full NATL dataset and preprocess it.
     rmse_based_scores_from_ds: Compute RMSE-based scores from a dataset.
@@ -45,6 +47,7 @@ import xrft
 import torch
 import xarray as xr
 import matplotlib.pyplot as plt
+from . import data
 
 def pipe(inp, fns):
     """
@@ -197,6 +200,98 @@ def triang_lr_adam(lit_mod, lr_min=5e-5, lr_max=3e-3, nsteps=200):
     }
 
 
+def remove_nan(da):
+    """
+    Fill NaN values in a DataArray using Gauss-Seidel interpolation.
+    Version proche de pyinterp.fill.gauss_seidel.
+
+    Args:
+        da (xarray.DataArray): The input DataArray.
+
+    Returns:
+        xarray.DataArray: The DataArray with NaN values filled.
+    """
+    da["lon"] = da.lon.assign_attrs(units="degrees_east")
+    da["lat"] = da.lat.assign_attrs(units="degrees_north")
+    
+    da_filled = da.copy()
+    
+    # Transposer pour avoir (lon, lat, time)
+    data = da.transpose("lon", "lat", "time").values.copy()
+    
+    # Appliquer Gauss-Seidel sur chaque tranche temporelle
+    for t in range(data.shape[2]):
+        data[:, :, t] = gauss_seidel_fill(data[:, :, t])
+    
+    # Réassigner les données
+    da_filled.transpose("lon", "lat", "time")[:, :] = data
+    
+    return da_filled
+
+
+def gauss_seidel_fill(grid, max_iterations=1000, tolerance=1e-5):
+    """
+    Fill NaN values using Gauss-Seidel iterative method.
+    
+    Args:
+        grid (np.ndarray): 2D array with NaN values to fill
+        max_iterations (int): Maximum number of iterations
+        tolerance (float): Convergence threshold
+    
+    Returns:
+        np.ndarray: Grid with NaN values filled
+    """
+    grid = grid.copy()
+    nan_mask = np.isnan(grid)
+    
+    if not np.any(nan_mask):
+        return grid
+    
+    # Initialiser les NaN avec la moyenne des valeurs valides
+    initial_value = np.nanmean(grid)
+    grid[nan_mask] = initial_value
+    
+    nx, ny = grid.shape
+    
+    for iteration in range(max_iterations):
+        max_change = 0.0
+        
+        # Balayage Gauss-Seidel
+        for i in range(nx):
+            for j in range(ny):
+                if nan_mask[i, j]:
+                    old_value = grid[i, j]
+                    
+                    # Collecter les voisins valides
+                    neighbors = []
+                    weights = []
+                    
+                    if i > 0:
+                        neighbors.append(grid[i-1, j])
+                        weights.append(1.0)
+                    if i < nx - 1:
+                        neighbors.append(grid[i+1, j])
+                        weights.append(1.0)
+                    if j > 0:
+                        neighbors.append(grid[i, j-1])
+                        weights.append(1.0)
+                    if j < ny - 1:
+                        neighbors.append(grid[i, j+1])
+                        weights.append(1.0)
+                    
+                    if neighbors:
+                        # Moyenne pondérée des voisins
+                        new_value = np.average(neighbors, weights=weights)
+                        grid[i, j] = new_value
+                        max_change = max(max_change, abs(new_value - old_value))
+        
+        # Vérifier la convergence
+        if max_change < tolerance:
+            break
+    
+    return grid
+
+
 def get_constant_crop(patch_dims, crop, dim_order=["time", "lat", "lon"]):
     """
     Generate a constant cropping mask for patches.
@@ -284,6 +379,38 @@ def load_enatl(*args, obs_from_tgt=True, **kwargs):
     if obs_from_tgt:
         ds = ds.assign(input=ds.tgt.transpose(*ds.input.dims).where(np.isfinite(ds.input), np.nan))
     return ds.transpose('time', 'lat', 'lon').to_array().load().sortby('variable')
+
+
+
+def load_altimetry_data(path, obs_from_tgt=False):
+    """
+    Load and preprocess altimetry data.
+
+    Args:
+        path (str): Path to the altimetry dataset.
+        obs_from_tgt (bool): Whether to use target data as observations.
+
+    Returns:
+        xarray.DataArray: The preprocessed altimetry dataset.
+    """
+    ds = (
+        xr.open_dataset(path)
+        # .assign(ssh=lambda ds: ds.ssh.coarsen(lon=2, lat=2).mean().interp(lat=ds.lat, lon=ds.lon))
+        .load()
+        .assign(
+            input=lambda ds: ds.nadir_obs,
+            tgt=lambda ds: remove_nan(ds.ssh),
+        )
+    )
+
+    if obs_from_tgt:
+        ds = ds.assign(input=ds.tgt.where(np.isfinite(ds.input), np.nan))
+
+    return (
+        ds[[*data.TrainingItem._fields]]
+        .transpose("time", "lat", "lon")
+        .to_array()
+    )
 
 
 def load_dc_data(**kwargs):
