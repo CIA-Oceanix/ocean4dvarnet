@@ -350,6 +350,110 @@ def get_triang_time_wei(patch_dims, offset=0, **crop_kw):
         patch_dims.values(),
     )
 
+# ============================================================================
+# Dataloader Functions
+# ============================================================================
+def _create_training_dataset(input_data, target_data, coords=None, 
+                            input_field='input', target_field='tgt'):
+    """
+    Create a standardized dataset with customizable fields.
+    
+    Args:
+        input_data (xr.DataArray): Input data (observations)
+        target_data (xr.DataArray): Target data (ground truth)
+        coords (dict, optional): Coordinates to use (default: coords from input_data)
+        input_field (str): Name of the field for input data
+        target_field (str): Name of the field for target data
+        
+    Returns:
+        xr.Dataset: Dataset with the specified fields
+    """
+    if coords is None:
+        coords = input_data.coords
+    
+    return xr.Dataset(
+        {
+            input_field: input_data,
+            target_field: (target_data.dims, target_data.values)
+        },
+        coords
+    )
+
+
+def _finalize_dataset(ds, obs_from_tgt=False, transpose_dims=('time', 'lat', 'lon'), 
+                     load=False, transpose_tgt_for_obs=True,
+                     fields=None):
+    """
+    Finalize a dataset by applying common transformations.
+    
+    Args:
+        ds (xr.Dataset): Dataset with the specified variables
+        obs_from_tgt (bool): If True, replaces input with target masked by input
+        transpose_dims (tuple): Dimensions for transposition
+        load (bool): If True, loads data into memory
+        transpose_tgt_for_obs (bool): If True, transposes target before masking
+        fields (list[str], optional): List of fields to select 
+                                     (default: TrainingItem._fields)
+        
+    Returns:
+        xr.DataArray: Finalized and sorted DataArray by variable
+    """
+    if fields is None:
+        fields = list(TrainingItem._fields)
+    
+    input_field = fields[0]
+    target_field = fields[1]
+    
+    # Apply obs_from_tgt if requested
+    if obs_from_tgt:
+        tgt = ds[target_field]
+        if transpose_tgt_for_obs:
+            tgt = tgt.transpose(*ds[input_field].dims)
+        ds = ds.assign(
+            **{input_field: tgt.where(np.isfinite(ds[input_field]), np.nan)}
+        )
+    
+    # Select fields, transpose and convert
+    result = (
+        ds[fields]
+        .transpose(*transpose_dims)
+        .to_array()
+        .sortby('variable')
+    )
+    
+    return result.load() if load else result
+
+def load_altimetry_data(path, obs_from_tgt=False):
+    """
+    Load and preprocess altimetry data.
+
+    Args:
+        path (str): Path to the altimetry dataset.
+        obs_from_tgt (bool): Whether to use target data as observations.
+
+    Returns:
+        xarray.DataArray: The preprocessed altimetry dataset.
+    """
+    # Load raw data
+    raw_ds = xr.open_dataset(path).load()
+    
+    # Create standardized dataset with TrainingItem
+    ds = _create_training_dataset(
+        input_data=raw_ds.nadir_obs,
+        target_data=remove_nan(raw_ds.ssh),
+        coords=raw_ds.nadir_obs.coords,
+        input_field=TrainingItem._fields[0],
+        target_field=TrainingItem._fields[1]
+    )
+    
+    # Finalize with common transformations
+    return _finalize_dataset(
+        ds, 
+        obs_from_tgt=obs_from_tgt,
+        fields=list(TrainingItem._fields)
+    )
+
+
 
 def load_enatl(*args, obs_from_tgt=True, **kwargs):
     """
@@ -379,38 +483,6 @@ def load_enatl(*args, obs_from_tgt=True, **kwargs):
     if obs_from_tgt:
         ds = ds.assign(input=ds.tgt.transpose(*ds.input.dims).where(np.isfinite(ds.input), np.nan))
     return ds.transpose('time', 'lat', 'lon').to_array().load().sortby('variable')
-
-
-
-def load_altimetry_data(path, obs_from_tgt=False):
-    """
-    Load and preprocess altimetry data.
-
-    Args:
-        path (str): Path to the altimetry dataset.
-        obs_from_tgt (bool): Whether to use target data as observations.
-
-    Returns:
-        xarray.DataArray: The preprocessed altimetry dataset.
-    """
-    ds = (
-        xr.open_dataset(path)
-        # .assign(ssh=lambda ds: ds.ssh.coarsen(lon=2, lat=2).mean().interp(lat=ds.lat, lon=ds.lon))
-        .load()
-        .assign(
-            input=lambda ds: ds.nadir_obs,
-            tgt=lambda ds: remove_nan(ds.ssh),
-        )
-    )
-
-    if obs_from_tgt:
-        ds = ds.assign(input=ds.tgt.where(np.isfinite(ds.input), np.nan))
-
-    return (
-        ds[[*data.TrainingItem._fields]]
-        .transpose("time", "lat", "lon")
-        .to_array()
-    )
 
 
 def load_dc_data(**kwargs):
