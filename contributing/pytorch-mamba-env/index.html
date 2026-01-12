@@ -1,0 +1,1859 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://cia-oceanix.github.io/ocean4dvarnet/contributing/pytorch-mamba-env/">
+      
+      
+        <link rel="prev" href="../fork/">
+      
+      
+        <link rel="next" href="../dev-env-set-up/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>Python Environment - Ocean4DVarNet Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#setting-up-a-cuda-pytorch-environment-wtih-mamba" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Ocean4DVarNet Documentation" class="md-header__button md-logo" aria-label="Ocean4DVarNet Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Ocean4DVarNet Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Python Environment
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/cia-oceanix/ocean4dvarnet" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../concepts/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Concepts
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../user-guide/migrate-from-src/" class="md-tabs__link">
+          
+  
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../installing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Installing
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../issues/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Issues
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Contributing
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../code-doc/data/" class="md-tabs__link">
+          
+  
+  
+  Code Documentation
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../related-projects/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Related Projects
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Ocean4DVarNet Documentation" class="md-nav__button md-logo" aria-label="Ocean4DVarNet Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Ocean4DVarNet Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/cia-oceanix/ocean4dvarnet" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/migrate-from-src/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../issues/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Issues
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Contributing
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guidelines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guidelines
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fork/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fork repository
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python Environment
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python Environment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#description" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Description
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installing-mamba" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installing Mamba
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-an-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating an Environment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuring-pip" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuring pip
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuring pip">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cache-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verifying-the-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying the Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installing-cuda-pytorch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installing CUDA + PyTorch
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#jupyterlab-for-notebooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Jupyterlab for Notebooks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known Issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Known Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#attributeerrornpinfwas-removed-in-the-numpy-20-release-usenpinfinstead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AttributeError('np.Infwas removed in the NumPy 2.0 release. Usenp.infinstead.'
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#importerror-optcondalibpython39site-packagestorchliblibtorch_cpuso-undefined-symbol-ijit_notifyevent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ImportError: /opt/conda/lib/python3.9/site-packages/torch/lib/libtorch_cpu.so: undefined symbol: iJIT_NotifyEvent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-unexpected-bus-error-encountered-in-worker-this-might-be-caused-by-insufficient-shared-memory-shm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: Unexpected bus error encountered in worker. This might be caused by insufficient shared memory (shm)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#outofmemoryerrorcuda-out-of-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OutOfMemoryError('CUDA out of memory ...
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dev-env-set-up/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development environment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../documentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code-quality/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Quality and Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../git-quicksheet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Git QuickSheet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Documentation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code Documentation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code-doc/data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code-doc/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code-doc/train/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    train
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code-doc/utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    utils
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../related-projects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Related Projects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#description" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Description
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installing-mamba" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installing Mamba
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-an-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating an Environment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuring-pip" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuring pip
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuring pip">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cache-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verifying-the-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying the Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installing-cuda-pytorch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installing CUDA + PyTorch
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#jupyterlab-for-notebooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Jupyterlab for Notebooks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known Issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Known Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#attributeerrornpinfwas-removed-in-the-numpy-20-release-usenpinfinstead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AttributeError('np.Infwas removed in the NumPy 2.0 release. Usenp.infinstead.'
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#importerror-optcondalibpython39site-packagestorchliblibtorch_cpuso-undefined-symbol-ijit_notifyevent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ImportError: /opt/conda/lib/python3.9/site-packages/torch/lib/libtorch_cpu.so: undefined symbol: iJIT_NotifyEvent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-unexpected-bus-error-encountered-in-worker-this-might-be-caused-by-insufficient-shared-memory-shm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: Unexpected bus error encountered in worker. This might be caused by insufficient shared memory (shm)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#outofmemoryerrorcuda-out-of-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OutOfMemoryError('CUDA out of memory ...
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="setting-up-a-cuda-pytorch-environment-wtih-mamba">Setting up a CUDA + PyTorch environment wtih Mamba</h1>
+<hr />
+<h2 id="description"><strong>Description</strong></h2>
+<p>Installation of a fully autonomous Conda/Mamba/pip environment, and deployment of CUDA + PyTorch.</p>
+<p>Mamba is prefered as Conda for perfomance, and using the miniforge3 distribution is the easyest way to install Mamba.</p>
+<p>"Autonomous" means that all the code, librairies, dependencies, caches, ... will be deployed inside a directory :</p>
+<ul>
+<li>nothing is shared with the system, the environment is fully independant.</li>
+<li>no specific administratif rights is need.</li>
+</ul>
+<p>Optional: ipython to run notebooks.</p>
+<hr />
+<h2 id="installing-mamba"><strong>Installing Mamba</strong></h2>
+<ul>
+<li>Define the root folder to deploy the environment : here, creating a folder "pytorch-code":
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span><span class="nv">$HOME</span>
+mkdir<span class="w"> </span>pytorch-code<span class="p">;</span>
+<span class="nb">cd</span><span class="w"> </span>pytorch-code
+<span class="c1"># pytorch-code environment -&gt; PT_ENV</span>
+<span class="nv">PT_ENV_PATH</span><span class="o">=</span><span class="nv">$PWD</span>
+<span class="nb">export</span><span class="w"> </span>PT_ENV_PATH
+<span class="nb">echo</span><span class="w"> </span><span class="nv">$PT_ENV_PATH</span>
+<span class="c1"># /home/local-user/pytorch-code</span>
+</code></pre></div></li>
+</ul>
+<p>Download and install miniforge3
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-L<span class="w"> </span>-O<span class="w"> </span><span class="s2">&quot;https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-</span><span class="k">$(</span>uname<span class="k">)</span><span class="s2">-</span><span class="k">$(</span>uname<span class="w"> </span>-m<span class="k">)</span><span class="s2">.sh&quot;</span>
+bash<span class="w"> </span>Miniforge3-Linux-x86_64.sh<span class="w"> </span>-b<span class="w"> </span>-p<span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">PT_ENV_PATH</span><span class="si">}</span><span class="s2">/miniforge3&quot;</span>
+</code></pre></div>
+Activate conda and mamba
+<div class="highlight"><pre><span></span><code><span class="nb">source</span><span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">PT_ENV_PATH</span><span class="si">}</span><span class="s2">/miniforge3/etc/profile.d/conda.sh&quot;</span>
+<span class="nb">source</span><span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">PT_ENV_PATH</span><span class="si">}</span><span class="s2">/miniforge3/etc/profile.d/mamba.sh&quot;</span>
+</code></pre></div></p>
+<ul>
+<li>Configure the default Conda environment
+<div class="highlight"><pre><span></span><code>conda<span class="w"> </span>config<span class="w"> </span>--system<span class="w"> </span>--set<span class="w"> </span>channel_priority<span class="w"> </span>strict
+conda<span class="w"> </span>config<span class="w"> </span>--system<span class="w"> </span>--remove-key<span class="w"> </span>channels
+conda<span class="w"> </span>config<span class="w"> </span>--system<span class="w"> </span>--add<span class="w"> </span>channels<span class="w">  </span>defaults
+conda<span class="w"> </span>config<span class="w"> </span>--system<span class="w"> </span>--prepend<span class="w"> </span>channels<span class="w"> </span>conda-forge
+conda<span class="w"> </span>config<span class="w"> </span>--system<span class="w"> </span>--remove<span class="w"> </span>channels<span class="w">  </span>defaults
+conda<span class="w"> </span>config<span class="w"> </span>--system<span class="w"> </span>--append<span class="w"> </span>channels<span class="w">  </span>nodefaults
+</code></pre></div></li>
+</ul>
+<hr />
+<h2 id="creating-an-environment"><strong>Creating an Environment</strong></h2>
+<ul>
+<li>Create the environment: Be sure to choose the correct Python version
+<div class="highlight"><pre><span></span><code>mamba<span class="w"> </span>create<span class="w"> </span>--name<span class="w"> </span><span class="s2">&quot;pytorch-code&quot;</span><span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12<span class="w"> </span>-y
+</code></pre></div></li>
+<li>Install pip
+<div class="highlight"><pre><span></span><code>mamba<span class="w"> </span>install<span class="w"> </span>pip
+</code></pre></div></li>
+<li>Display Python versions before activating the environment
+<div class="highlight"><pre><span></span><code>python3<span class="w"> </span>--version
+<span class="c1"># Python 3.10.12</span>
+
+which<span class="w"> </span>python3
+<span class="c1"># /usr/bin/python3</span>
+
+python3<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>--version
+pip<span class="w"> </span><span class="m">25</span>.0.1<span class="w"> </span>from<span class="w"> </span>/home/local-user/.local/lib/python3.10/site-packages/pip<span class="w"> </span><span class="o">(</span>python<span class="w"> </span><span class="m">3</span>.10<span class="o">)</span>
+</code></pre></div></li>
+<li>Activate the environment
+<div class="highlight"><pre><span></span><code>mamba<span class="w"> </span>activate<span class="w"> </span>pytorch-code
+</code></pre></div></li>
+<li>Verify that the Python and pip versions from the environment are being used
+<div class="highlight"><pre><span></span><code>python3<span class="w"> </span>--version
+<span class="c1"># Python 3.12.9</span>
+
+which<span class="w"> </span>python3
+<span class="c1"># /home/local-user/pytorch-code/miniforge3/envs/pytorch-code/bin/python3</span>
+</code></pre></div></li>
+<li>Configure Conda for this environment
+<div class="highlight"><pre><span></span><code>conda<span class="w"> </span>config<span class="w"> </span>--env<span class="w"> </span>--set<span class="w"> </span>channel_priority<span class="w"> </span>flexible
+conda<span class="w"> </span>config<span class="w"> </span>--env<span class="w"> </span>--remove-key<span class="w"> </span>channels
+conda<span class="w"> </span>config<span class="w"> </span>--env<span class="w"> </span>--add<span class="w"> </span>channels<span class="w">  </span>defaults
+conda<span class="w"> </span>config<span class="w"> </span>--env<span class="w"> </span>--prepend<span class="w"> </span>channels<span class="w"> </span>conda-forge
+conda<span class="w"> </span>config<span class="w"> </span>--env<span class="w"> </span>--remove<span class="w"> </span>channels<span class="w">  </span>defaults
+conda<span class="w"> </span>config<span class="w"> </span>--env<span class="w"> </span>--append<span class="w"> </span>channels<span class="w">  </span>nodefaults
+</code></pre></div></li>
+</ul>
+<hr />
+<h2 id="configuring-pip"><strong>Configuring pip</strong></h2>
+<h3 id="cache-management">Cache Management</h3>
+<ul>
+<li>Configuration
+<div class="highlight"><pre><span></span><code>mkdir<span class="w"> </span>-p<span class="w"> </span><span class="si">${</span><span class="nv">PT_ENV_PATH</span><span class="si">}</span>/miniforge3/pip/cache
+
+pip<span class="w"> </span>config<span class="w"> </span>--site<span class="w"> </span><span class="nb">set</span><span class="w"> </span>global.cache-dir<span class="w">  </span><span class="si">${</span><span class="nv">PT_ENV_PATH</span><span class="si">}</span>/miniforge3/pip/cache
+<span class="c1"># Writing to /home/local-user/my-dev/miniforge3/envs/4Dvarnet-test/pip.conf</span>
+</code></pre></div></li>
+<li>Verification
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>cache<span class="w"> </span>dir
+<span class="c1"># /home/local-user/my-dev/miniforge3/pip/cache</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="k">[install]</span>
+<span class="na">no-user</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">true</span>
+</code></pre></div></li>
+</ul>
+<hr />
+<h2 id="verifying-the-configuration">Verifying the Configuration</h2>
+<p>The packages and versions may vary depending on the Python version. However, the lists of packages installed via mamba and pip should be close to the lists below:</p>
+<ul>
+<li>mamba
+<div class="highlight"><pre><span></span><code>mamba<span class="w"> </span>list
+<span class="c1"># # packages in environment at /home/local-user/pytorch-code/miniforge3/envs/pytorch-code:</span>
+<span class="c1"># #</span>
+<span class="c1"># # Name                    Version                   Build  Channel</span>
+<span class="c1"># _libgcc_mutex             0.1                 conda_forge    conda-forge</span>
+<span class="c1"># pip                       25.0.1             pyh8b19718_0    conda-forge</span>
+<span class="c1"># python                    3.12.9          h9e4cc4f_1_cpython    conda-forge</span>
+...
+</code></pre></div></li>
+<li>pip
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>freeze
+<span class="c1"># setuptools==75.8.2</span>
+<span class="c1"># wheel==0.45.1</span>
+</code></pre></div></li>
+</ul>
+<hr />
+<h2 id="installing-cuda-pytorch"><strong>Installing CUDA + PyTorch</strong></h2>
+<p><code>mamba</code> allows manual package installation, but the best practice is to use an environment file: <code>environment.yaml</code></p>
+<ul>
+<li>If no <code>environment.yaml</code> file available, create it, ie :
+<div class="highlight"><pre><span></span><code><span class="nt">channels</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">conda-forge</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pytorch</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nvidia</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nodefaults</span>
+<span class="nt">dependencies</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pip</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pytorch::pytorch</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pytorch::pytorch-cuda</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pyinterp</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tqdm</span>
+</code></pre></div></li>
+<li>and update the environment (takes time)
+<div class="highlight"><pre><span></span><code>mamba<span class="w"> </span>env<span class="w"> </span>update<span class="w"> </span>-f<span class="w"> </span>environment.yaml
+</code></pre></div></li>
+</ul>
+<p>Messages like the one below are related to an Internet connection issue, just rerun the command.
+<div class="highlight"><pre><span></span><code>CondaSSLError:<span class="w"> </span>Encountered<span class="w"> </span>an<span class="w"> </span>SSL<span class="w"> </span>error.<span class="w"> </span>Most<span class="w"> </span>likely<span class="w"> </span>a<span class="w"> </span>certificate<span class="w"> </span>verification<span class="w"> </span>issue.
+...
+CondaHTTPError:<span class="w"> </span>HTTP<span class="w"> </span><span class="m">000</span><span class="w"> </span>CONNECTION<span class="w"> </span>FAILED<span class="w"> </span><span class="k">for</span><span class="w"> </span>url<span class="w"> </span>&lt;https://conda.anaconda.org/conda-forge/linux-64/libcufft-11.2.1.3-he02047a_2.conda&gt;
+...
+An<span class="w"> </span>HTTP<span class="w"> </span>error<span class="w"> </span>occurred<span class="w"> </span>when<span class="w"> </span>trying<span class="w"> </span>to<span class="w"> </span>retrieve<span class="w"> </span>this<span class="w"> </span>URL.<span class="w"> </span>HTTP<span class="w"> </span>errors<span class="w"> </span>are<span class="w"> </span>often<span class="w"> </span>intermittent,<span class="w"> </span>and<span class="w"> </span>a<span class="w"> </span>simple<span class="w"> </span>retry<span class="w"> </span>will<span class="w"> </span>get<span class="w"> </span>you<span class="w"> </span>on<span class="w"> </span>your<span class="w"> </span>way.
+</code></pre></div></p>
+<hr />
+<h2 id="jupyterlab-for-notebooks"><strong>Jupyterlab for Notebooks</strong></h2>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>jupyterlab
+</code></pre></div>
+<hr />
+<h2 id="known-issues"><strong>Known Issues</strong></h2>
+<hr />
+<h3 id="attributeerrornpinfwas-removed-in-the-numpy-20-release-usenpinfinstead"><strong><em><code>AttributeError('</code>np.Inf<code>was removed in the NumPy 2.0 release. Use</code>np.inf<code>instead.'</code></em></strong></h3>
+<ul>
+<li>Error message : </li>
+</ul>
+<div class="highlight"><pre><span></span><code>hydra.errors.InstantiationException:<span class="w"> </span>Error<span class="w"> </span><span class="k">in</span><span class="w"> </span>call<span class="w"> </span>to<span class="w"> </span>target<span class="w"> </span><span class="s1">&#39;pytorch_lightning.callbacks.model_checkpoint.ModelCheckpoint&#39;</span>:
+AttributeError<span class="o">(</span><span class="s1">&#39;`np.Inf` was removed in the NumPy 2.0 release. Use `np.inf` instead.&#39;</span><span class="o">)</span>
+full_key:<span class="w"> </span>entrypoints<span class="o">[</span><span class="m">1</span><span class="o">]</span>.trainer.callbacks2
+</code></pre></div>
+<ul>
+<li>Solution : Numpy must be downgraded to version minor than 2.0</li>
+</ul>
+<div class="highlight"><pre><span></span><code>conda<span class="w"> </span>install<span class="w"> </span><span class="s1">&#39;numpy&lt;2.0&#39;</span>
+</code></pre></div>
+<hr />
+<h3 id="importerror-optcondalibpython39site-packagestorchliblibtorch_cpuso-undefined-symbol-ijit_notifyevent"><strong><em><code>ImportError: /opt/conda/lib/python3.9/site-packages/torch/lib/libtorch_cpu.so: undefined symbol: iJIT_NotifyEvent</code></em></strong></h3>
+<ul>
+<li>Cause : </li>
+</ul>
+<div class="highlight"><pre><span></span><code>The<span class="w"> </span>reason<span class="w"> </span>is<span class="w"> </span>that<span class="w"> </span>PyTorch<span class="w"> </span>was<span class="w"> </span>built<span class="w"> </span>against<span class="w"> </span>an<span class="w"> </span>old<span class="w"> </span>version<span class="w"> </span>of<span class="w"> </span>MKL<span class="w"> </span>distribution<span class="w"> </span>which<span class="w"> </span>contains<span class="w"> </span>this<span class="w"> </span>symbol.<span class="w"> </span>However,<span class="w"> </span>this<span class="w"> </span>symbol<span class="w"> </span>got<span class="w"> </span>removed<span class="w"> </span><span class="k">in</span><span class="w"> </span>MKL<span class="w"> </span><span class="m">2024</span>.1.
+The<span class="w"> </span>PyTorch<span class="w"> </span>binary<span class="w"> </span>released<span class="w"> </span>via<span class="w"> </span>conda<span class="w"> </span>channel<span class="w"> </span>was<span class="w"> </span>linked<span class="w"> </span>to<span class="w"> </span>MKL<span class="w"> </span>dynamically,<span class="w"> </span>so<span class="w"> </span>you<span class="w"> </span>got<span class="w"> </span>this<span class="w"> </span>error.
+The<span class="w"> </span>PyTorch<span class="w"> </span>binary<span class="w"> </span>released<span class="w"> </span>via<span class="w"> </span>pip<span class="w"> </span><span class="o">(</span>pip<span class="w"> </span>install<span class="o">)</span><span class="w"> </span>was<span class="w"> </span>linked<span class="w"> </span>to<span class="w"> </span>MKL<span class="w"> </span>statically.<span class="w"> </span>You<span class="w"> </span>can<span class="w"> </span>switch<span class="w"> </span>to<span class="w"> </span>the<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>one<span class="w"> </span>to<span class="w"> </span>get<span class="w"> </span>rid<span class="w"> </span>of<span class="w"> </span>this<span class="w"> </span>error<span class="w"> </span>with<span class="w"> </span>MKL<span class="w"> </span><span class="m">2024</span>.1.
+...
+</code></pre></div>
+<ul>
+<li>Solution : mkl must be downgraded to version <code>2024.0</code>
+<div class="highlight"><pre><span></span><code>conda<span class="w"> </span>install<span class="w"> </span><span class="nv">mkl</span><span class="o">==</span><span class="m">2024</span>.0
+</code></pre></div></li>
+</ul>
+<p>Source :</p>
+<ul>
+<li><a href="https://github.com/pytorch/pytorch/issues/123097">https://github.com/pytorch/pytorch/issues/123097</a></li>
+</ul>
+<hr />
+<h3 id="error-unexpected-bus-error-encountered-in-worker-this-might-be-caused-by-insufficient-shared-memory-shm"><strong><em><code>ERROR: Unexpected bus error encountered in worker. This might be caused by insufficient shared memory (shm)</code></em></strong></h3>
+<ul>
+<li>
+<p>Full message :
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>main.py<span class="w"> </span><span class="nv">xp</span><span class="o">=</span>base
+<span class="c1"># ...</span>
+<span class="c1"># Testing: 0it [00:00, ?it/s]ERROR: Unexpected bus error encountered in worker. This might be caused by insufficient shared memory (shm).</span>
+<span class="c1"># Error executing job with overrides: [&#39;xp=base&#39;]</span>
+<span class="c1"># Error in call to target &#39;src.test.base_test&#39;:</span>
+<span class="c1"># RuntimeError(&#39;DataLoader worker (pid(s) 2387) exited unexpectedly&#39;)</span>
+<span class="c1"># full_key: entrypoints1</span>
+</code></pre></div></p>
+</li>
+<li>
+<p>Cause
+When working with worker, shm memory is needed, to allow workers to share datas. </p>
+</li>
+</ul>
+<p>Solution :</p>
+<ol>
+<li>Set <code>num_workers</code> to <code>0</code>, in the experience file. So worker  will not be used. It can be slow.</li>
+</ol>
+<p><div class="highlight"><pre><span></span><code><span class="o">{</span>batch_size:<span class="w"> </span><span class="m">16</span>,<span class="w"> </span>num_workers:<span class="w"> </span><span class="m">0</span><span class="o">}</span>
+</code></pre></div>
+2. Update SHM memory in the system if it is possible. About 512k must be enough.</p>
+<p>To show SHM, use the command :
+<div class="highlight"><pre><span></span><code>df<span class="w"> </span>-h<span class="w"> </span>/dev/shm
+</code></pre></div></p>
+<hr />
+<h3 id="outofmemoryerrorcuda-out-of-memory"><strong><em>OutOfMemoryError('CUDA out of memory ...</em></strong></h3>
+<ul>
+<li>
+<p>Full message
+<div class="highlight"><pre><span></span><code>OutOfMemoryError<span class="o">(</span><span class="s1">&#39;CUDA out of memory. Tried to allocate 1.65 GiB (GPU 0; 47.74 GiB total capacity; 41.57 GiB already allocated; 665.69 MiB free; 43.08 GiB reserved in total by PyTorch) If reserved memory is &gt;&gt; allocated memory try setting max_split_size_mb to avoid fragmentation.  See documentation for Memory Management and PYTORCH_CUDA_ALLOC_CONF&#39;</span><span class="o">)</span>
+full_key:<span class="w"> </span>entrypoints1
+</code></pre></div></p>
+</li>
+<li>
+<p>Solution : reduce the value of <code>batch_size</code> in the experience file.
+<div class="highlight"><pre><span></span><code><span class="o">{</span>batch_size:<span class="w"> </span><span class="m">4</span>,<span class="w"> </span>num_workers:<span class="w"> </span><span class="m">1</span><span class="o">}</span>
+</code></pre></div></p>
+</li>
+</ul>
+<p>To show the GPU memory, use the command <code>nvidia-smi</code>command.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../fork/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Fork repository">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Fork repository
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../dev-env-set-up/" class="md-footer__link md-footer__link--next" aria-label="Next: Development environment">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Development environment
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; IMT Atlantique/OceaniX. This software is governed by the CeCILL-C license under French law and abiding by the rules of distribution of free software.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "content.code.annotate", "search.suggest", "search.highlight", "navigation.footer"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
