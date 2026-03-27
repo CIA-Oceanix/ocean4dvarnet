@@ -1,7 +1,7 @@
 """
 This module defines models and solvers for 4D-VarNet.
 
-4D-VarNet is a framework for solving inverse problems in data assimilation 
+4D-VarNet is a framework for solving inverse problems in data assimilation
 using deep learning and PyTorch Lightning.
 
 Classes:
@@ -436,6 +436,7 @@ class ConvLstmGradModel(nn.Module):
         out = self.conv_out(hidden)
         out = self.up(out)
         return out
+
 
 class BaseObsCost(nn.Module):
     """
