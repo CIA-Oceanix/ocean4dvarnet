@@ -146,33 +146,19 @@ class Lit4dVarNet(pl.LightningModule):
         if self.training and batch.tgt.isfinite().float().mean() < 0.9:
             return None, None
 
-        loss, out = self.base_step(batch, phase)
+        out = self(batch=batch)
+
+        loss = self.weighted_mse(out - batch.tgt, self.rec_weight)
         grad_loss = self.weighted_mse(kfilts.sobel(out) - kfilts.sobel(batch.tgt), self.rec_weight)
         prior_cost = self.solver.prior_cost(self.solver.init_state(batch, out))
-        self.log(f"{phase}_gloss", grad_loss, prog_bar=True, on_step=False, on_epoch=True)
-
-        training_loss = 50 * loss + 1000 * grad_loss + 1.0 * prior_cost
-        return training_loss, out
-
-    def base_step(self, batch, phase=""):
-        """
-        Perform the base step for loss computation.
-
-        Args:
-            batch (dict): Input batch.
-            phase (str, optional): Phase ("train" or "val").
-
-        Returns:
-            tuple: Loss and output tensor.
-        """
-        out = self(batch=batch)
-        loss = self.weighted_mse(out - batch.tgt, self.rec_weight)
 
         with torch.no_grad():
             self.log(f"{phase}_mse", 10000 * loss * self.norm_stats[1]**2, prog_bar=True, on_step=False, on_epoch=True)
             self.log(f"{phase}_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
+            self.log(f"{phase}_gloss", grad_loss, prog_bar=True, on_step=False, on_epoch=True)
 
-        return loss, out
+        training_loss = 50 * loss + 1000 * grad_loss + 1.0 * prior_cost
+        return training_loss, out
 
     def configure_optimizers(self):
         """
