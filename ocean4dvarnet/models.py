@@ -148,6 +148,20 @@ class Lit4dVarNet(pl.LightningModule):
 
         out = self(batch=batch)
 
+        return self.training_loss(batch, out, phase), out
+
+    def training_loss(self, batch, out, phase):
+        """
+        Compute the training loss to be backpropagated.
+
+        Args:
+            batch (dict): Input batch.
+            out (tensor): Reconstruction from given observations.
+            phase (str): Phase ("train" or "val").
+
+        Returns:
+            tuple: Loss.
+        """
         loss = self.weighted_mse(out - batch.tgt, self.rec_weight)
         grad_loss = self.weighted_mse(kfilts.sobel(out) - kfilts.sobel(batch.tgt), self.rec_weight)
         prior_cost = self.solver.prior_cost(self.solver.init_state(batch, out))
@@ -157,8 +171,7 @@ class Lit4dVarNet(pl.LightningModule):
             self.log(f"{phase}_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
             self.log(f"{phase}_gloss", grad_loss, prog_bar=True, on_step=False, on_epoch=True)
 
-        training_loss = 50 * loss + 1000 * grad_loss + 1.0 * prior_cost
-        return training_loss, out
+        return 50 * loss + 1000 * grad_loss + 1.0 * prior_cost
 
     def configure_optimizers(self):
         """
