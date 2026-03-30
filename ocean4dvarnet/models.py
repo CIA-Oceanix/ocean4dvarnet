@@ -13,6 +13,7 @@ Classes:
 """
 
 from pathlib import Path
+from typing import Optional
 import pandas as pd
 import pytorch_lightning as pl
 import kornia.filters as kfilts
@@ -20,6 +21,10 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+
+#===================================================
+# Lightning Modules
+#====================================================
 
 class LitModel(pl.LightningModule):
     """
@@ -267,6 +272,10 @@ class Lit4dVarNet(LitModel):
         return base_loss + 1.0 * prior_cost
 
 
+#===================================================
+# Solvers
+#====================================================
+
 class GradSolver(nn.Module):
     """
     A gradient-based solver for optimization in 4D-VarNet.
@@ -366,6 +375,87 @@ class GradSolver(nn.Module):
         return state
 
 
+#===================================================
+# Modeles (UNET, ConvLSTM)
+#====================================================
+
+class GradModelWithCondition(torch.nn.Module):
+    """
+    A generic conditional model for gradient modulation.
+
+    Attributes:
+        grad_model : grad update model
+    """
+
+    def __init__(self, grad_model=False, dropout=0.,use_grad_norm=True):
+        """
+        Initialize the ConvLstmGradModel.
+
+        Args:
+            grad_model : grad update model
+        """
+        super().__init__()
+        self.grad_model = grad_model
+        self.dropout = torch.nn.Dropout(dropout)
+        self.use_grad_norm = use_grad_norm
+
+        if hasattr(self.grad_model, 'dim_3d') == True:
+            self.dim_3d = self.grad_model.dim_3d
+
+        if hasattr(self.grad_model, 'dims') == True:
+            if self.grad_model.dims == 3:
+                self.dim_3d = True
+
+    def reset_state(self, inp):
+        """
+        Args:
+            inp (torch.Tensor): Input tensor to determine state size.
+        """
+        #Initialize hidden and cell state for LSTM if use a ConvLstmGradModel, otherwise set to None
+        if hasattr(self.grad_model, "dim_hidden"):
+            size = [inp.shape[0], self.grad_model.dim_hidden, *inp.shape[-2:]]
+            if hasattr(self.grad_model, "downsamp"):
+                downsamp = self.grad_model.downsamp
+            else:
+                downsamp = None
+            self.down = nn.AvgPool2d(downsamp) if downsamp is not None else nn.Identity()
+            self._state = [
+                self.down(torch.zeros(size, device=inp.device)),
+                self.down(torch.zeros(size, device=inp.device)),
+            ]
+        else:
+            self._state = None, None  
+
+        self._grad_norm = None
+
+
+
+    def forward(self, x, timesteps=None, extra=[]):
+        """
+        Perform the forward pass of the LSTM.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output tensor.
+        """
+
+        if self._grad_norm is None:
+            if self.use_grad_norm:
+                self._grad_norm = (x**2).mean().sqrt()
+            else:
+                self._grad_norm = 1.
+
+        #print('self._grad_norm in GradModelWithCondition:', self._grad_norm, flush=True)
+        x = x / self._grad_norm
+        hidden, cell = self._state
+        x = self.dropout(x)
+        out = self.grad_model.predict(x, timesteps=timesteps, extra=extra, hidden=hidden, cell=cell)
+
+        return out
+
+
 class ConvLstmGradModel(nn.Module):
     """
     A convolutional LSTM model for gradient modulation.
@@ -412,21 +502,9 @@ class ConvLstmGradModel(nn.Module):
             else nn.Identity()
         )
 
-    def reset_state(self, inp):
-        """
-        Reset the internal state of the LSTM.
 
-        Args:
-            inp (torch.Tensor): Input tensor to determine state size.
-        """
-        size = [inp.shape[0], self.dim_hidden, *inp.shape[-2:]]
-        self._grad_norm = None
-        self._state = [
-            self.down(torch.zeros(size, device=inp.device)),
-            self.down(torch.zeros(size, device=inp.device)),
-        ]
 
-    def forward(self, x):
+    def predict(self, x, timesteps=None, extra=[], hidden=None, cell=None):
         """
         Perform the forward pass of the LSTM.
 
@@ -436,11 +514,11 @@ class ConvLstmGradModel(nn.Module):
         Returns:
             torch.Tensor: Output tensor.
         """
-        if self._grad_norm is None:
-            self._grad_norm = (x**2).mean().sqrt()
-        x = x / self._grad_norm
-        hidden, cell = self._state
-        x = self.dropout(x)
+        # if self._grad_norm is None:
+        #     self._grad_norm = (x**2).mean().sqrt()
+        # x = x / self._grad_norm
+        #hidden, cell = self._state
+        #x = self.dropout(x)
         x = self.down(x)
         gates = self.gates(torch.cat((x, hidden), 1))
 
@@ -459,6 +537,12 @@ class ConvLstmGradModel(nn.Module):
         out = self.up(out)
         return out
 
+
+
+
+#===================================================
+# Observation Cost and Prior Cost
+#====================================================
 
 class BaseObsCost(nn.Module):
     """
