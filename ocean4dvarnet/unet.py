@@ -16,8 +16,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
-
 
 
 @dataclass(eq=False)
@@ -72,7 +70,7 @@ class UNetModel(nn.Module):
     ignore_time: bool = False
     input_projection: bool = True
     bias: bool = True
-    interp_mode: str = 'nearest' #  or 'bilinear'
+    interp_mode: str = "nearest"  #  or 'bilinear'
 
     image_size: int = -1  # not used...
     _target_: str = "lib.models.gd_unet.UNetModel"
@@ -88,9 +86,7 @@ class UNetModel(nn.Module):
 
         self.time_embed_dim = self.model_channels * 4
         if self.ignore_time:
-            self.time_embed = lambda x: torch.zeros(
-                x.shape[0], self.time_embed_dim, device=x.device, dtype=x.dtype
-            )
+            self.time_embed = lambda x: torch.zeros(x.shape[0], self.time_embed_dim, device=x.device, dtype=x.dtype)
         else:
             self.time_embed = nn.Sequential(
                 linear(self.model_channels, self.time_embed_dim),
@@ -99,26 +95,17 @@ class UNetModel(nn.Module):
             )
 
         if self.num_classes is not None:
+            print("... num_classes :", self.num_classes, flush=True)
 
-            print('... num_classes :',self.num_classes,flush=True)
-
-            self.label_emb = nn.Embedding(
-                self.num_classes + 1, self.time_embed_dim, padding_idx=self.num_classes
-            )
+            self.label_emb = nn.Embedding(self.num_classes + 1, self.time_embed_dim, padding_idx=self.num_classes)
 
         ch = input_ch = int(self.channel_mult[0] * self.model_channels)
         if self.input_projection:
             self.input_blocks = nn.ModuleList(
-                [
-                    TimestepEmbedSequential(
-                        conv_nd(self.dims, self.in_channels, ch, 3, padding=1)
-                    )
-                ]
+                [TimestepEmbedSequential(conv_nd(self.dims, self.in_channels, ch, 3, padding=1))]
             )
         else:
-            self.input_blocks = nn.ModuleList(
-                [TimestepEmbedSequential(torch.nn.Identity())]
-            )
+            self.input_blocks = nn.ModuleList([TimestepEmbedSequential(torch.nn.Identity())])
         self._feature_size = ch
         input_block_chans = [ch]
         ds = 1
@@ -135,7 +122,7 @@ class UNetModel(nn.Module):
                         use_scale_shift_norm=self.use_scale_shift_norm,
                         emb_off=self.ignore_time and self.num_classes is None,
                         bias=self.bias,
-                        interp_mode=self.interp_mode
+                        interp_mode=self.interp_mode,
                     )
                 ]
                 ch = int(mult * self.model_channels)
@@ -170,9 +157,7 @@ class UNetModel(nn.Module):
                             emb_off=self.ignore_time and self.num_classes is None,
                         )
                         if self.resblock_updown
-                        else Downsample(
-                            ch, self.conv_resample, dims=self.dims, out_channels=out_ch, bias=self.bias
-                        )
+                        else Downsample(ch, self.conv_resample, dims=self.dims, out_channels=out_ch, bias=self.bias)
                     )
                 )
                 ch = out_ch
@@ -224,7 +209,7 @@ class UNetModel(nn.Module):
                         use_scale_shift_norm=self.use_scale_shift_norm,
                         emb_off=self.ignore_time and self.num_classes is None,
                         bias=self.bias,
-                        interp_mode=self.interp_mode
+                        interp_mode=self.interp_mode,
                     )
                 ]
                 ch = int(self.model_channels * mult)
@@ -252,11 +237,16 @@ class UNetModel(nn.Module):
                             up=True,
                             emb_off=self.ignore_time and self.num_classes is None,
                             bias=self.bias,
-                            interp_mode=self.interp_mode
+                            interp_mode=self.interp_mode,
                         )
                         if self.resblock_updown
                         else Upsample(
-                            ch, self.conv_resample, dims=self.dims, out_channels=out_ch, bias=self.bias, interp_mode=self.interp_mode
+                            ch,
+                            self.conv_resample,
+                            dims=self.dims,
+                            out_channels=out_ch,
+                            bias=self.bias,
+                            interp_mode=self.interp_mode,
                         )
                     )
                     ds //= 2
@@ -268,7 +258,8 @@ class UNetModel(nn.Module):
             nn.SiLU(),
             zero_module(conv_nd(self.dims, input_ch, self.out_channels, 3, padding=1)),
         )
-    def reset_state(self,x=None):
+
+    def reset_state(self, x=None):
         self._grad_norm = None
 
     def predict(self, x, timesteps, extra, hidden=None, cell=None):
@@ -297,15 +288,13 @@ class UNetModel(nn.Module):
         if self.num_classes and "label" not in extra:
             # Hack to deal with ddp find_unused_parameters not working with activation checkpointing...
             # self.num_classes corresponds to the pad index of the embedding table
-            extra["label"] = torch.full(
-                (x.size(0),), self.num_classes, dtype=torch.long, device=x.device
-            )
+            extra["label"] = torch.full((x.size(0),), self.num_classes, dtype=torch.long, device=x.device)
 
         if self.num_classes is not None and "label" in extra:
             y = extra["label"]
-            assert (
-                y.shape == x.shape[:1]
-            ), f"Labels have shape {y.shape}, which does not match the batch dimension of the input {x.shape}"
+            assert y.shape == x.shape[:1], (
+                f"Labels have shape {y.shape}, which does not match the batch dimension of the input {x.shape}"
+            )
             emb = emb + self.label_emb(y)
 
         h = x
@@ -334,12 +323,10 @@ class UNetModel(nn.Module):
 
         out = self.predict(x, timesteps, extra)
 
-
-        #if self.dims+2 > len(batch.input.shape):
+        # if self.dims+2 > len(batch.input.shape):
         #    out = out.view(out.shape[0], out.shape[2], out.shape[3], out.shape[4] ) # add channel dim if missing
 
         return out
-    
 
 
 def linear(*args, **kwargs):
@@ -347,6 +334,7 @@ def linear(*args, **kwargs):
     Create a linear module.
     """
     return nn.Linear(*args, **kwargs)
+
 
 class TimestepBlock(nn.Module):
     """
@@ -373,9 +361,6 @@ class TimestepEmbedSequential(nn.Sequential, TimestepBlock):
             else:
                 x = layer(x)
         return x
-    
-
-
 
 
 def conv_nd(dims, *args, **kwargs):
@@ -389,7 +374,6 @@ def conv_nd(dims, *args, **kwargs):
     elif dims == 3:
         return nn.Conv3d(*args, **kwargs)
     raise ValueError(f"unsupported dimensions: {dims}")
-
 
 
 class ResBlock(TimestepBlock):
@@ -422,7 +406,7 @@ class ResBlock(TimestepBlock):
         down=False,
         emb_off=False,
         bias=True,
-        interp_mode='nearest',
+        interp_mode="nearest",
     ):
         super().__init__()
         self.channels = channels
@@ -460,9 +444,7 @@ class ResBlock(TimestepBlock):
                 nn.SiLU(),
                 linear(
                     emb_channels,
-                    2 * self.out_channels
-                    if use_scale_shift_norm
-                    else self.out_channels,
+                    2 * self.out_channels if use_scale_shift_norm else self.out_channels,
                 ),
             )
 
@@ -470,17 +452,13 @@ class ResBlock(TimestepBlock):
             normalization(self.out_channels),
             nn.SiLU(),
             nn.Dropout(p=dropout),
-            zero_module(
-                conv_nd(dims, self.out_channels, self.out_channels, 3, padding=1, bias=bias)
-            ),
+            zero_module(conv_nd(dims, self.out_channels, self.out_channels, 3, padding=1, bias=bias)),
         )
 
         if self.out_channels == channels:
             self.skip_connection = nn.Identity()
         elif use_conv:
-            self.skip_connection = conv_nd(
-                dims, channels, self.out_channels, 3, padding=1, bias=bias
-            )
+            self.skip_connection = conv_nd(dims, channels, self.out_channels, 3, padding=1, bias=bias)
         else:
             self.skip_connection = conv_nd(dims, channels, self.out_channels, 1, bias=bias)
 
@@ -529,10 +507,10 @@ def normalization(channels):
     """
     return GroupNorm32(32, channels)
 
+
 class GroupNorm32(nn.GroupNorm):
     def forward(self, x):
         return super().forward(x.float()).type(x.dtype)
-
 
 
 class Upsample(nn.Module):
@@ -544,28 +522,25 @@ class Upsample(nn.Module):
                  upsampling occurs in the inner-two dimensions.
     """
 
-    def __init__(self, channels, use_conv, dims=2, out_channels=None, bias=True, interp_mode='nearest'):
+    def __init__(self, channels, use_conv, dims=2, out_channels=None, bias=True, interp_mode="nearest"):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
         self.use_conv = use_conv
         self.dims = dims
-        if interp_mode != 'nearest' :
-             self.interp_mode = interp_mode
+        if interp_mode != "nearest":
+            self.interp_mode = interp_mode
         if use_conv:
             self.conv = conv_nd(dims, self.channels, self.out_channels, 3, padding=1, bias=bias)
-    
 
     def forward(self, x):
         assert x.shape[1] == self.channels
 
-        if hasattr(self, 'interp_mode') is False:
-            self.interp_mode = 'nearest'
+        if hasattr(self, "interp_mode") is False:
+            self.interp_mode = "nearest"
 
         if self.dims == 3:
-            x = F.interpolate(
-                x, (x.shape[2], x.shape[3] * 2, x.shape[4] * 2), mode=self.interp_mode
-            )
+            x = F.interpolate(x, (x.shape[2], x.shape[3] * 2, x.shape[4] * 2), mode=self.interp_mode)
         else:
             x = F.interpolate(x, scale_factor=2, mode=self.interp_mode)
         if self.use_conv:
@@ -590,9 +565,7 @@ class Downsample(nn.Module):
         self.dims = dims
         stride = 2 if dims != 3 else (1, 2, 2)
         if use_conv:
-            self.op = conv_nd(
-                dims, self.channels, self.out_channels, 3, stride=stride, padding=1, bias=bias
-            )
+            self.op = conv_nd(dims, self.channels, self.out_channels, 3, stride=stride, padding=1, bias=bias)
         else:
             assert self.channels == self.out_channels
             self.op = avg_pool_nd(dims, kernel_size=stride, stride=stride)
@@ -600,19 +573,16 @@ class Downsample(nn.Module):
     def forward(self, x):
         assert x.shape[1] == self.channels
         return self.op(x)
-    
+
 
 class ConstantEmbedding(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.embedding_table = nn.Parameter(torch.empty((1, out_channels)))
-        nn.init.uniform_(
-            self.embedding_table, -(in_channels**0.5), in_channels**0.5
-        )
+        nn.init.uniform_(self.embedding_table, -(in_channels**0.5), in_channels**0.5)
 
     def forward(self, emb):
         return self.embedding_table.repeat(emb.shape[0], 1)
-
 
 
 def zero_module(module):
@@ -641,7 +611,6 @@ def checkpoint(func, inputs, params, flag):
         # return CheckpointFunction.apply(func, len(inputs), *args)
     else:
         return func(*inputs)
-    
 
 
 def avg_pool_nd(dims, *args, **kwargs):
@@ -677,9 +646,9 @@ class AttentionBlock(nn.Module):
         if num_head_channels == -1:
             self.num_heads = num_heads
         else:
-            assert (
-                channels % num_head_channels == 0
-            ), f"q,k,v channels {channels} is not divisible by num_head_channels {num_head_channels}"
+            assert channels % num_head_channels == 0, (
+                f"q,k,v channels {channels} is not divisible by num_head_channels {num_head_channels}"
+            )
             self.num_heads = channels // num_head_channels
         self.use_checkpoint = use_checkpoint
         self.norm = normalization(channels)
@@ -710,8 +679,6 @@ class AttentionBlock(nn.Module):
         return (x + h).reshape(b, c, *spatial)
 
 
-
-
 class QKVAttentionLegacy(nn.Module):
     """
     A module which performs QKV attention. Matches legacy QKVAttention + input/ouput heads shaping
@@ -732,9 +699,7 @@ class QKVAttentionLegacy(nn.Module):
         ch = width // (3 * self.n_heads)
         q, k, v = qkv.reshape(bs * self.n_heads, ch * 3, length).split(ch, dim=1)
         scale = 1 / math.sqrt(math.sqrt(ch))
-        weight = torch.einsum(
-            "bct,bcs->bts", q * scale, k * scale
-        )  # More stable with f16 than dividing afterwards
+        weight = torch.einsum("bct,bcs->bts", q * scale, k * scale)  # More stable with f16 than dividing afterwards
         weight = torch.softmax(weight.float(), dim=-1).type(weight.dtype)
         a = torch.einsum("bts,bcs->bct", weight, v)
         return a.reshape(bs, -1, length)
@@ -770,9 +735,7 @@ class QKVAttention(nn.Module):
             (k * scale).view(bs * self.n_heads, ch, length),
         )  # More stable with f16 than dividing afterwards
         weight = torch.softmax(weight.float(), dim=-1).type(weight.dtype)
-        a = torch.einsum(
-            "bts,bcs->bct", weight, v.reshape(bs * self.n_heads, ch, length)
-        )
+        a = torch.einsum("bts,bcs->bct", weight, v.reshape(bs * self.n_heads, ch, length))
         return a.reshape(bs, -1, length)
 
     @staticmethod
@@ -800,10 +763,7 @@ def count_flops_attn(model, _x, y):
     model.total_ops += torch.DoubleTensor([matmul_ops])
 
 
-
-def base2_fourier_features(
-    inputs: torch.Tensor, start: int = 0, stop: int = 8, step: int = 1
-) -> torch.Tensor:
+def base2_fourier_features(inputs: torch.Tensor, start: int = 0, stop: int = 8, step: int = 1) -> torch.Tensor:
     freqs = torch.arange(start, stop, step, device=inputs.device, dtype=inputs.dtype)
 
     # Create Base 2 Fourier features
@@ -817,7 +777,6 @@ def base2_fourier_features(
     return h
 
 
-
 def timestep_embedding(timesteps, dim, max_period=10000):
     """
     Create sinusoidal timestep embeddings.
@@ -828,9 +787,9 @@ def timestep_embedding(timesteps, dim, max_period=10000):
     :return: an [N x dim] Tensor of positional embeddings.
     """
     half = dim // 2
-    freqs = torch.exp(
-        -math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half
-    ).to(device=timesteps.device)
+    freqs = torch.exp(-math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half).to(
+        device=timesteps.device
+    )
     args = timesteps[:, None].float() * freqs[None]
     embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
     if dim % 2:
