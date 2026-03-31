@@ -19,7 +19,7 @@ import kornia.filters as kfilts
 import torch
 from torch import nn
 import torch.nn.functional as F
-
+from typing import Optional
 
 # ===================================================
 # Lightning Modules
@@ -273,20 +273,36 @@ class Lit4dVarNet(LitModel):
 
 class GradSolver(nn.Module):
     """
-    A gradient-based solver for optimization in 4D-VarNet.
+    A gradient-based solver for optimization in unrolled architectures.
+
 
     Attributes:
-        prior_cost (nn.Module): The prior cost function.
-        obs_cost (nn.Module): The observation cost function.
+        prior_cost (nn.Module, optional): The prior cost function.
+        obs_cost (nn.Module, optional): The observation cost function.
         grad_mod (nn.Module): The gradient modulation model.
         n_step (int): Number of optimization steps.
         lr_grad (float): Learning rate for gradient updates.
         lbd (float): Regularization parameter.
+
+
     """
 
-    def __init__(self, prior_cost, obs_cost, grad_mod, n_step, lr_grad=0.2, lbd=1.0, **kwargs):
+
+    def __init__(
+        self,
+        grad_mod,
+        n_step,
+        lr_grad=0.2,
+        lbd=1.0,
+        input_grad_update="state",
+        std_init=0.1,
+        prior_cost: Optional[nn.Module] = None,
+        obs_cost: Optional[nn.Module] = None,
+        **kwargs,
+    ):
         """
         Initialize the GradSolver.
+
 
         Args:
             prior_cost (nn.Module): The prior cost function.
@@ -295,75 +311,216 @@ class GradSolver(nn.Module):
             n_step (int): Number of optimization steps.
             lr_grad (float, optional): Learning rate for gradient updates. Defaults to 0.2.
             lbd (float, optional): Regularization parameter. Defaults to 1.0.
+            input_grad_update (str, optional): Quantities added for updating the input gradient. Defaults to "state".
+            std_init (float, optional): Standard deviation for initializing the state. Defaults to 0.1.
         """
         super().__init__()
         self.prior_cost = prior_cost
         self.obs_cost = obs_cost
         self.grad_mod = grad_mod
 
+
         self.n_step = n_step
         self.lr_grad = lr_grad
         self.lbd = lbd
 
+
+        self.input_grad_update = input_grad_update
+        self.std_init = std_init
+
+
         self._grad_norm = None
+
 
     def init_state(self, batch, x_init=None):
         """
         Initialize the state for optimization.
 
+
         Args:
             batch (dict): Input batch containing data.
             x_init (torch.Tensor, optional): Initial state. Defaults to None.
+
 
         Returns:
             torch.Tensor: Initialized state.
         """
         if x_init is not None:
-            return x_init
+            return x_init.detach().requires_grad_(True)
 
-        return batch.input.nan_to_num().detach().requires_grad_(True)
 
-    def solver_step(self, state, batch, step):
+        if self.std_init > 0:
+            x0 = self.std_init * torch.randn_like(batch.input)
+            return x0.detach().requires_grad_(True)
+        else:
+            return torch.zeros_like(batch.input).detach().requires_grad_(True)
+
+
+    def init_h_state(self, batch, h_state=None):
+        """
+        Initialize the state for optimization.
+
+
+        Args:
+            batch (dict): Input batch containing data.
+            x_init (torch.Tensor, optional): Initial state. Defaults to None.
+
+
+        Returns:
+            torch.Tensor: Initialized state.
+        """
+        if h_state is not None:
+            self.h_state = h_state
+        else:
+            self.h_state = torch.zeros_like(batch.input).detach().requires_grad_(True)
+
+
+    def format2D_3D(self, x):
+        if hasattr(self.grad_mod, "dim_3d"):
+            if self.grad_mod.dim_3d:
+                x = x.unsqueeze(1)
+
+
+        return x
+
+
+    def solver_step(self, state, batch, step, alpha_step=1.0):
         """
         Perform a single optimization step.
+
 
         Args:
             state (torch.Tensor): Current state.
             batch (dict): Input batch containing data.
-            step (int): Current optimization step.
+            step (int): Current optimization step between 0 and 1.
+
 
         Returns:
             torch.Tensor: Updated state.
         """
-        var_cost = self.prior_cost(state) + self.lbd**2 * self.obs_cost(state, batch)
-        grad = torch.autograd.grad(var_cost, state, create_graph=True)[0]
 
-        gmod = self.grad_mod(grad)
-        state_update = 1 / (step + 1) * gmod + self.lr_grad * (step + 1) / self.n_step * grad
+
+        if isinstance(step, float):
+            t = torch.tensor([step], device=state.device).repeat(state.shape[0])
+        else:
+            t = step
+
+
+        if "subgrad" in self.input_grad_update:
+            gobs = (batch.input - state).nan_to_num()
+
+
+            gprior = state - self.prior_cost.forward_ae(state)
+            grad = torch.concatenate(
+                (self.format2D_3D(gobs), self.format2D_3D(gprior)), dim=1
+            )
+
+
+            if "state" in self.input_grad_update:
+                grad = torch.concatenate((grad, self.format2D_3D(state)), dim=1)
+
+
+            if "previous" in self.input_grad_update:
+                grad = torch.concatenate((grad, self.format2D_3D(self.h_state)), dim=1)
+
+
+        elif "gradsplit" in self.input_grad_update:
+            prior_cost = self.prior_cost(state)
+            obs_cost = self.obs_cost(state, batch)
+            # Compute full gradient
+            grad_prior = torch.autograd.grad(prior_cost, state, create_graph=True)[0]
+            grad_obs = torch.autograd.grad(obs_cost, state, create_graph=True)[0]
+            grad = torch.concatenate((grad_prior, grad_obs), dim=1)
+            if "state" in self.input_grad_update:
+                grad = grad / ((grad**2).mean().sqrt().detach())
+                grad = torch.concatenate((grad, state), dim=1)
+
+
+        elif "grad" in self.input_grad_update:
+            var_cost = self.prior_cost(state) + self.lbd**2 * self.obs_cost(
+                state, batch
+            )
+            grad = torch.autograd.grad(var_cost, state, create_graph=True)[0]
+
+
+            if "state" in self.input_grad_update:
+                grad = grad / ((grad**2).mean().sqrt().detach())
+                grad = torch.concatenate((grad, self.format2D_3D(state)), dim=1)
+
+
+            if "previous" in self.input_grad_update:
+                grad = torch.concatenate((grad, self.format2D_3D(self.h_state)), dim=1)
+
+
+        elif self.input_grad_update == "obs-only":
+            grad = batch.input.nan_to_num()
+
+
+        elif self.input_grad_update == "obs+state":
+            grad = torch.concatenate(
+                (self.format2D_3D(state), self.format2D_3D(batch.input.nan_to_num())),
+                dim=1,
+            )
+
+
+        gmod = self.grad_mod(grad, timesteps=t, extra=None)
+        if hasattr(self.grad_mod, "dim_3d"):
+            if self.grad_mod.dim_3d:
+                gmod = gmod.squeeze(1)
+
+
+        state_update = alpha_step * gmod
+        if ("grad" in self.input_grad_update) and (self.lr_grad > 0.0):
+            state_update += (
+                self.lr_grad
+                * (step + 1)
+                / self.n_step
+                * grad[:, : state.shape[1], :, :]
+            )
+
+
+        self.h_state = state_update
+
 
         return state - state_update
 
-    def forward(self, batch):
+
+    def forward(self, batch, x_init=None, h_state=None, phase="test"):
         """
         Perform the forward pass of the solver.
 
+
         Args:
             batch (dict): Input batch containing data.
+
 
         Returns:
             torch.Tensor: Final optimized state.
         """
         with torch.set_grad_enabled(True):
-            state = self.init_state(batch)
+            state = self.init_state(batch, x_init=x_init)
+            self.init_h_state(batch, h_state=h_state)
             self.grad_mod.reset_state(batch.input)
 
-            for step in range(self.n_step):
-                state = self.solver_step(state, batch, step=step)
-                if not self.training:
-                    state = state.detach().requires_grad_(True)
 
             if not self.training:
-                state = self.prior_cost.forward_ae(state)
+                if ("subgrad" in self.input_grad_update) or (
+                    "grad" not in self.input_grad_update
+                ):
+                    state.requires_grad_(False)
+                    self.h_state.requires_grad_(False)
+
+
+            for step in range(self.n_step):
+                alpha_step = 1.0 / self.n_step
+                state = self.solver_step(state, batch, step=step/self.n_step, alpha_step=alpha_step)
+                if (not self.training) and ("grad" in self.input_grad_update):
+                    if "subgrad" in self.input_grad_update:
+                        state = state.detach().requires_grad_(False)
+                    else:
+                        state = state.detach().requires_grad_(True)
+
+
         return state
 
 
@@ -517,6 +674,7 @@ class ConvLstmGradModel(nn.Module):
         out = self.conv_out(hidden)
         out = self.up(out)
         return out
+
 
 
 # ===================================================
