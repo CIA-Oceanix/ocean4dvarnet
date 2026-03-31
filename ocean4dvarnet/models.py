@@ -617,7 +617,7 @@ class ConvLstmGradModel(nn.Module):
         up (nn.Module): Upsampling layer.
     """
 
-    def __init__(self, dim_in, dim_hidden, kernel_size=3, dropout=0.1, downsamp=None):
+    def __init__(self, dim_in, dim_out, dim_hidden, kernel_size=3, dropout=0.1, downsamp=None):
         """
         Initialize the ConvLstmGradModel.
 
@@ -637,7 +637,7 @@ class ConvLstmGradModel(nn.Module):
             padding=kernel_size // 2,
         )
 
-        self.conv_out = torch.nn.Conv2d(dim_hidden, dim_in, kernel_size=kernel_size, padding=kernel_size // 2)
+        self.conv_out = torch.nn.Conv2d(dim_hidden, dim_out, kernel_size=kernel_size, padding=kernel_size // 2)
 
         self.dropout = torch.nn.Dropout(dropout)
         self._state = []
