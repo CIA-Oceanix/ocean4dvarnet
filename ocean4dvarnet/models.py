@@ -287,7 +287,6 @@ class GradSolver(nn.Module):
 
     """
 
-
     def __init__(
         self,
         grad_mod,
@@ -319,18 +318,14 @@ class GradSolver(nn.Module):
         self.obs_cost = obs_cost
         self.grad_mod = grad_mod
 
-
         self.n_step = n_step
         self.lr_grad = lr_grad
         self.lbd = lbd
 
-
         self.input_grad_update = input_grad_update
         self.std_init = std_init
 
-
         self._grad_norm = None
-
 
     def init_state(self, batch, x_init=None):
         """
@@ -348,13 +343,11 @@ class GradSolver(nn.Module):
         if x_init is not None:
             return x_init.detach().requires_grad_(True)
 
-
         if self.std_init > 0:
             x0 = self.std_init * torch.randn_like(batch.input)
             return x0.detach().requires_grad_(True)
         else:
             return torch.zeros_like(batch.input).detach().requires_grad_(True)
-
 
     def init_h_state(self, batch, h_state=None):
         """
@@ -374,15 +367,12 @@ class GradSolver(nn.Module):
         else:
             self.h_state = torch.zeros_like(batch.input).detach().requires_grad_(True)
 
-
     def format2D_3D(self, x):
         if hasattr(self.grad_mod, "dim_3d"):
             if self.grad_mod.dim_3d:
                 x = x.unsqueeze(1)
 
-
         return x
-
 
     def solver_step(self, state, batch, step, alpha_step=1.0):
         """
@@ -399,30 +389,22 @@ class GradSolver(nn.Module):
             torch.Tensor: Updated state.
         """
 
-
         if isinstance(step, float):
             t = torch.tensor([step], device=state.device).repeat(state.shape[0])
         else:
             t = step
 
-
         if "subgrad" in self.input_grad_update:
             gobs = (batch.input - state).nan_to_num()
 
-
             gprior = state - self.prior_cost.forward_ae(state)
-            grad = torch.concatenate(
-                (self.format2D_3D(gobs), self.format2D_3D(gprior)), dim=1
-            )
-
+            grad = torch.concatenate((self.format2D_3D(gobs), self.format2D_3D(gprior)), dim=1)
 
             if "state" in self.input_grad_update:
                 grad = torch.concatenate((grad, self.format2D_3D(state)), dim=1)
 
-
             if "previous" in self.input_grad_update:
                 grad = torch.concatenate((grad, self.format2D_3D(self.h_state)), dim=1)
-
 
         elif "gradsplit" in self.input_grad_update:
             prior_cost = self.prior_cost(state)
@@ -435,26 +417,19 @@ class GradSolver(nn.Module):
                 grad = grad / ((grad**2).mean().sqrt().detach())
                 grad = torch.concatenate((grad, state), dim=1)
 
-
         elif "grad" in self.input_grad_update:
-            var_cost = self.prior_cost(state) + self.lbd**2 * self.obs_cost(
-                state, batch
-            )
+            var_cost = self.prior_cost(state) + self.lbd**2 * self.obs_cost(state, batch)
             grad = torch.autograd.grad(var_cost, state, create_graph=True)[0]
-
 
             if "state" in self.input_grad_update:
                 grad = grad / ((grad**2).mean().sqrt().detach())
                 grad = torch.concatenate((grad, self.format2D_3D(state)), dim=1)
 
-
             if "previous" in self.input_grad_update:
                 grad = torch.concatenate((grad, self.format2D_3D(self.h_state)), dim=1)
 
-
         elif self.input_grad_update == "obs-only":
             grad = batch.input.nan_to_num()
-
 
         elif self.input_grad_update == "obs+state":
             grad = torch.concatenate(
@@ -462,28 +437,18 @@ class GradSolver(nn.Module):
                 dim=1,
             )
 
-
         gmod = self.grad_mod(grad, timesteps=t, extra=None)
         if hasattr(self.grad_mod, "dim_3d"):
             if self.grad_mod.dim_3d:
                 gmod = gmod.squeeze(1)
 
-
         state_update = alpha_step * gmod
         if ("grad" in self.input_grad_update) and (self.lr_grad > 0.0):
-            state_update += (
-                self.lr_grad
-                * (step + 1)
-                / self.n_step
-                * grad[:, : state.shape[1], :, :]
-            )
-
+            state_update += self.lr_grad * (step + 1) / self.n_step * grad[:, : state.shape[1], :, :]
 
         self.h_state = state_update
 
-
         return state - state_update
-
 
     def forward(self, batch, x_init=None, h_state=None, phase="test"):
         """
@@ -502,24 +467,19 @@ class GradSolver(nn.Module):
             self.init_h_state(batch, h_state=h_state)
             self.grad_mod.reset_state(batch.input)
 
-
             if not self.training:
-                if ("subgrad" in self.input_grad_update) or (
-                    "grad" not in self.input_grad_update
-                ):
+                if ("subgrad" in self.input_grad_update) or ("grad" not in self.input_grad_update):
                     state.requires_grad_(False)
                     self.h_state.requires_grad_(False)
 
-
             for step in range(self.n_step):
                 alpha_step = 1.0 / self.n_step
-                state = self.solver_step(state, batch, step=step/self.n_step, alpha_step=alpha_step)
+                state = self.solver_step(state, batch, step=step / self.n_step, alpha_step=alpha_step)
                 if (not self.training) and ("grad" in self.input_grad_update):
                     if "subgrad" in self.input_grad_update:
                         state = state.detach().requires_grad_(False)
                     else:
                         state = state.detach().requires_grad_(True)
-
 
         return state
 
@@ -674,7 +634,6 @@ class ConvLstmGradModel(nn.Module):
         out = self.conv_out(hidden)
         out = self.up(out)
         return out
-
 
 
 # ===================================================
