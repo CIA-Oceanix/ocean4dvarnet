@@ -1,7 +1,7 @@
 """
 This module defines models and solvers for 4D-VarNet.
 
-4D-VarNet is a framework for solving inverse problems in data assimilation 
+4D-VarNet is a framework for solving inverse problems in data assimilation
 using deep learning and PyTorch Lightning.
 
 Classes:
@@ -21,9 +21,9 @@ from torch import nn
 import torch.nn.functional as F
 
 
-class Lit4dVarNet(pl.LightningModule):
+class LitModel(pl.LightningModule):
     """
-    A PyTorch Lightning module for training and testing 4D-VarNet models.
+    A PyTorch Lightning module for training and testing models.
 
     Attributes:
         solver (GradSolver): The solver used for optimization.
@@ -146,33 +146,31 @@ class Lit4dVarNet(pl.LightningModule):
         if self.training and batch.tgt.isfinite().float().mean() < 0.9:
             return None, None
 
-        loss, out = self.base_step(batch, phase)
-        grad_loss = self.weighted_mse(kfilts.sobel(out) - kfilts.sobel(batch.tgt), self.rec_weight)
-        prior_cost = self.solver.prior_cost(self.solver.init_state(batch, out))
-        self.log(f"{phase}_gloss", grad_loss, prog_bar=True, on_step=False, on_epoch=True)
+        out = self(batch=batch)
 
-        training_loss = 50 * loss + 1000 * grad_loss + 1.0 * prior_cost
-        return training_loss, out
+        return self.training_loss(batch, out, phase), out
 
-    def base_step(self, batch, phase=""):
+    def training_loss(self, batch, out, phase):
         """
-        Perform the base step for loss computation.
+        Compute the training loss to be backpropagated.
 
         Args:
             batch (dict): Input batch.
-            phase (str, optional): Phase ("train" or "val").
+            out (tensor): Reconstruction from given observations.
+            phase (str): Phase ("train" or "val").
 
         Returns:
-            tuple: Loss and output tensor.
+            tuple: Loss.
         """
-        out = self(batch=batch)
         loss = self.weighted_mse(out - batch.tgt, self.rec_weight)
+        grad_loss = self.weighted_mse(kfilts.sobel(out) - kfilts.sobel(batch.tgt), self.rec_weight)
 
         with torch.no_grad():
             self.log(f"{phase}_mse", 10000 * loss * self.norm_stats[1]**2, prog_bar=True, on_step=False, on_epoch=True)
             self.log(f"{phase}_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
+            self.log(f"{phase}_gloss", grad_loss, prog_bar=True, on_step=False, on_epoch=True)
 
-        return loss, out
+        return 50 * loss + 1000 * grad_loss
 
     def configure_optimizers(self):
         """
@@ -243,6 +241,30 @@ class Lit4dVarNet(pl.LightningModule):
             self.test_data.to_netcdf(Path(self.logger.log_dir) / 'test_data.nc')
             print(Path(self.trainer.log_dir) / 'test_data.nc')
             self.logger.log_metrics(metrics.to_dict())
+
+
+class Lit4dVarNet(LitModel):
+    """
+    A PyTorch Lightning module for training and testing 4DVarNet models.
+    See LitMod for further details.
+    """
+
+    def training_loss(self, batch, out, phase):
+        """
+        Compute the training loss of 4DVarNet.
+
+        Args:
+            batch (dict): Input batch.
+            out (tensor): Reconstruction from given observations.
+            phase (str): Phase ("train" or "val").
+
+        Returns:
+            tuple: Loss.
+        """
+        base_loss = super().training_loss(batch, out, phase)
+        prior_cost = self.solver.prior_cost(self.solver.init_state(batch, out))
+
+        return base_loss + 1.0 * prior_cost
 
 
 class GradSolver(nn.Module):
@@ -436,6 +458,7 @@ class ConvLstmGradModel(nn.Module):
         out = self.conv_out(hidden)
         out = self.up(out)
         return out
+
 
 class BaseObsCost(nn.Module):
     """
