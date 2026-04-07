@@ -21,9 +21,10 @@ from torch import nn
 import torch.nn.functional as F
 from typing import Optional
 
+
 # ===================================================
 # Lightning Modules
-# ====================================================
+# ===================================================
 
 class LitModel(pl.LightningModule):
     """
@@ -267,14 +268,13 @@ class Lit4dVarNet(LitModel):
         return base_loss + 1.0 * prior_cost
 
 
-#===================================================
+# ===================================================
 # Solvers
-# ====================================================
+# ===================================================
 
 class GradSolver(nn.Module):
     """
     A gradient-based solver for optimization in unrolled architectures.
-
 
     Attributes:
         prior_cost (nn.Module, optional): The prior cost function.
@@ -283,7 +283,6 @@ class GradSolver(nn.Module):
         n_step (int): Number of optimization steps.
         lr_grad (float): Learning rate for gradient updates.
         lbd (float): Regularization parameter.
-
 
     """
 
@@ -301,7 +300,6 @@ class GradSolver(nn.Module):
     ):
         """
         Initialize the GradSolver.
-
 
         Args:
             prior_cost (nn.Module): The prior cost function.
@@ -331,11 +329,9 @@ class GradSolver(nn.Module):
         """
         Initialize the state for optimization.
 
-
         Args:
             batch (dict): Input batch containing data.
             x_init (torch.Tensor, optional): Initial state. Defaults to None.
-
 
         Returns:
             torch.Tensor: Initialized state.
@@ -353,11 +349,9 @@ class GradSolver(nn.Module):
         """
         Initialize the state for optimization.
 
-
         Args:
             batch (dict): Input batch containing data.
             x_init (torch.Tensor, optional): Initial state. Defaults to None.
-
 
         Returns:
             torch.Tensor: Initialized state.
@@ -378,12 +372,10 @@ class GradSolver(nn.Module):
         """
         Perform a single optimization step.
 
-
         Args:
             state (torch.Tensor): Current state.
             batch (dict): Input batch containing data.
             step (int): Current optimization step between 0 and 1.
-
 
         Returns:
             torch.Tensor: Updated state.
@@ -454,10 +446,8 @@ class GradSolver(nn.Module):
         """
         Perform the forward pass of the solver.
 
-
         Args:
             batch (dict): Input batch containing data.
-
 
         Returns:
             torch.Tensor: Final optimized state.
@@ -484,10 +474,9 @@ class GradSolver(nn.Module):
         return state
 
 
-#===================================================
+# ===================================================
 # Modeles (UNET, ConvLSTM)
-# ====================================================
-
+# ===================================================
 
 class GradModelWithCondition(torch.nn.Module):
     """
@@ -638,8 +627,7 @@ class ConvLstmGradModel(nn.Module):
 
 # ===================================================
 # Observation Cost and Prior Cost
-# ====================================================
-
+# ===================================================
 
 class BaseObsCost(nn.Module):
     """
