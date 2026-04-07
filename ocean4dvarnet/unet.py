@@ -95,8 +95,7 @@ class UNetModel(nn.Module):
             )
 
         if self.num_classes is not None:
-            print("... num_classes :", self.num_classes, flush=True)
-
+            # print("... num_classes :", self.num_classes, flush=True)
             self.label_emb = nn.Embedding(self.num_classes + 1, self.time_embed_dim, padding_idx=self.num_classes)
 
         ch = input_ch = int(self.channel_mult[0] * self.model_channels)
@@ -127,7 +126,6 @@ class UNetModel(nn.Module):
                 ]
                 ch = int(mult * self.model_channels)
 
-                print(ds)
                 if ds in self.attention_resolutions:
                     layers.append(
                         AttentionBlock(
