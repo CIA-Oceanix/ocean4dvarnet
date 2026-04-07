@@ -19,7 +19,12 @@ import kornia.filters as kfilts
 import torch
 from torch import nn
 import torch.nn.functional as F
+from typing import Optional
 
+
+# ===================================================
+# Lightning Modules
+# ===================================================
 
 class LitModel(pl.LightningModule):
     """
@@ -36,8 +41,7 @@ class LitModel(pl.LightningModule):
     """
 
     def __init__(
-        self, solver, rec_weight, opt_fn, test_metrics=None,
-        pre_metric_fn=None, norm_stats=None, persist_rw=True
+        self, solver, rec_weight, opt_fn, test_metrics=None, pre_metric_fn=None, norm_stats=None, persist_rw=True
     ):
         """
         Initialize the Lit4dVarNet module.
@@ -53,7 +57,7 @@ class LitModel(pl.LightningModule):
         """
         super().__init__()
         self.solver = solver
-        self.register_buffer('rec_weight', torch.from_numpy(rec_weight), persistent=persist_rw)
+        self.register_buffer("rec_weight", torch.from_numpy(rec_weight), persistent=persist_rw)
         self.test_data = None
         self._norm_stats = norm_stats
         self.opt_fn = opt_fn
@@ -72,7 +76,7 @@ class LitModel(pl.LightningModule):
             return self._norm_stats
         elif self.trainer.datamodule is not None:
             return self.trainer.datamodule.norm_stats()
-        return (0., 1.)
+        return (0.0, 1.0)
 
     @staticmethod
     def weighted_mse(err, weight):
@@ -166,7 +170,9 @@ class LitModel(pl.LightningModule):
         grad_loss = self.weighted_mse(kfilts.sobel(out) - kfilts.sobel(batch.tgt), self.rec_weight)
 
         with torch.no_grad():
-            self.log(f"{phase}_mse", 10000 * loss * self.norm_stats[1]**2, prog_bar=True, on_step=False, on_epoch=True)
+            self.log(
+                f"{phase}_mse", 10000 * loss * self.norm_stats[1] ** 2, prog_bar=True, on_step=False, on_epoch=True
+            )
             self.log(f"{phase}_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
             self.log(f"{phase}_gloss", grad_loss, prog_bar=True, on_step=False, on_epoch=True)
 
@@ -194,14 +200,16 @@ class LitModel(pl.LightningModule):
         out = self(batch=batch)
         m, s = self.norm_stats
 
-        self.test_data.append(torch.stack(
-            [
-                batch.input.cpu() * s + m,
-                batch.tgt.cpu() * s + m,
-                out.squeeze(dim=-1).detach().cpu() * s + m,
-            ],
-            dim=1,
-        ))
+        self.test_data.append(
+            torch.stack(
+                [
+                    batch.input.cpu() * s + m,
+                    batch.tgt.cpu() * s + m,
+                    out.squeeze(dim=-1).detach().cpu() * s + m,
+                ],
+                dim=1,
+            )
+        )
 
     @property
     def test_quantities(self):
@@ -211,7 +219,7 @@ class LitModel(pl.LightningModule):
         Returns:
             list: List of test quantity names.
         """
-        return ['inp', 'tgt', 'out']
+        return ["inp", "tgt", "out"]
 
     def on_test_epoch_end(self):
         """
@@ -219,27 +227,20 @@ class LitModel(pl.LightningModule):
 
         This includes logging metrics and saving test data.
         """
-        rec_da = self.trainer.test_dataloaders.dataset.reconstruct(
-            self.test_data, self.rec_weight.cpu().numpy()
-        )
+        rec_da = self.trainer.test_dataloaders.dataset.reconstruct(self.test_data, self.rec_weight.cpu().numpy())
 
         if isinstance(rec_da, list):
             rec_da = rec_da[0]
 
-        self.test_data = rec_da.assign_coords(
-            dict(v0=self.test_quantities)
-        ).to_dataset(dim='v0')
+        self.test_data = rec_da.assign_coords(dict(v0=self.test_quantities)).to_dataset(dim="v0")
 
         metric_data = self.test_data.pipe(self.pre_metric_fn)
-        metrics = pd.Series({
-            metric_n: metric_fn(metric_data)
-            for metric_n, metric_fn in self.metrics.items()
-        })
+        metrics = pd.Series({metric_n: metric_fn(metric_data) for metric_n, metric_fn in self.metrics.items()})
 
         print(metrics.to_frame(name="Metrics").to_markdown())
         if self.logger:
-            self.test_data.to_netcdf(Path(self.logger.log_dir) / 'test_data.nc')
-            print(Path(self.trainer.log_dir) / 'test_data.nc')
+            self.test_data.to_netcdf(Path(self.logger.log_dir) / "test_data.nc")
+            print(Path(self.trainer.log_dir) / "test_data.nc")
             self.logger.log_metrics(metrics.to_dict())
 
 
@@ -267,20 +268,36 @@ class Lit4dVarNet(LitModel):
         return base_loss + 1.0 * prior_cost
 
 
+# ===================================================
+# Solvers
+# ===================================================
+
 class GradSolver(nn.Module):
     """
-    A gradient-based solver for optimization in 4D-VarNet.
+    A gradient-based solver for optimization in unrolled architectures.
 
     Attributes:
-        prior_cost (nn.Module): The prior cost function.
-        obs_cost (nn.Module): The observation cost function.
+        prior_cost (nn.Module, optional): The prior cost function.
+        obs_cost (nn.Module, optional): The observation cost function.
         grad_mod (nn.Module): The gradient modulation model.
         n_step (int): Number of optimization steps.
         lr_grad (float): Learning rate for gradient updates.
         lbd (float): Regularization parameter.
+
     """
 
-    def __init__(self, prior_cost, obs_cost, grad_mod, n_step, lr_grad=0.2, lbd=1.0, **kwargs):
+    def __init__(
+        self,
+        grad_mod,
+        n_step,
+        lr_grad=0.2,
+        lbd=1.0,
+        input_grad_update="state",
+        std_init=0.1,
+        prior_cost: Optional[nn.Module] = None,
+        obs_cost: Optional[nn.Module] = None,
+        **kwargs,
+    ):
         """
         Initialize the GradSolver.
 
@@ -291,6 +308,8 @@ class GradSolver(nn.Module):
             n_step (int): Number of optimization steps.
             lr_grad (float, optional): Learning rate for gradient updates. Defaults to 0.2.
             lbd (float, optional): Regularization parameter. Defaults to 1.0.
+            input_grad_update (str, optional): Quantities added for updating the input gradient. Defaults to "state".
+            std_init (float, optional): Standard deviation for initializing the state. Defaults to 0.1.
         """
         super().__init__()
         self.prior_cost = prior_cost
@@ -300,6 +319,9 @@ class GradSolver(nn.Module):
         self.n_step = n_step
         self.lr_grad = lr_grad
         self.lbd = lbd
+
+        self.input_grad_update = input_grad_update
+        self.std_init = std_init
 
         self._grad_norm = None
 
@@ -315,34 +337,112 @@ class GradSolver(nn.Module):
             torch.Tensor: Initialized state.
         """
         if x_init is not None:
-            return x_init
+            return x_init.detach().requires_grad_(True)
 
-        return batch.input.nan_to_num().detach().requires_grad_(True)
+        if self.std_init > 0:
+            x0 = self.std_init * torch.randn_like(batch.input)
+            return x0.detach().requires_grad_(True)
+        else:
+            return torch.zeros_like(batch.input).detach().requires_grad_(True)
 
-    def solver_step(self, state, batch, step):
+    def init_h_state(self, batch, h_state=None):
+        """
+        Initialize the state for optimization.
+
+        Args:
+            batch (dict): Input batch containing data.
+            x_init (torch.Tensor, optional): Initial state. Defaults to None.
+
+        Returns:
+            torch.Tensor: Initialized state.
+        """
+        if h_state is not None:
+            self.h_state = h_state
+        else:
+            self.h_state = torch.zeros_like(batch.input).detach().requires_grad_(True)
+
+    def format2D_3D(self, x):
+        if hasattr(self.grad_mod, "dim_3d"):
+            if self.grad_mod.dim_3d:
+                x = x.unsqueeze(1)
+
+        return x
+
+    def solver_step(self, state, batch, step, alpha_step=1.0):
         """
         Perform a single optimization step.
 
         Args:
             state (torch.Tensor): Current state.
             batch (dict): Input batch containing data.
-            step (int): Current optimization step.
+            step (int): Current optimization step between 0 and 1.
 
         Returns:
             torch.Tensor: Updated state.
         """
-        var_cost = self.prior_cost(state) + self.lbd**2 * self.obs_cost(state, batch)
-        grad = torch.autograd.grad(var_cost, state, create_graph=True)[0]
 
-        gmod = self.grad_mod(grad)
-        state_update = (
-            1 / (step + 1) * gmod
-            + self.lr_grad * (step + 1) / self.n_step * grad
-        )
+        if isinstance(step, float):
+            t = torch.tensor([step], device=state.device).repeat(state.shape[0])
+        else:
+            t = step
+
+        if "subgrad" in self.input_grad_update:
+            gobs = (batch.input - state).nan_to_num()
+
+            gprior = state - self.prior_cost.forward_ae(state)
+            grad = torch.concatenate((self.format2D_3D(gobs), self.format2D_3D(gprior)), dim=1)
+
+            if "state" in self.input_grad_update:
+                grad = torch.concatenate((grad, self.format2D_3D(state)), dim=1)
+
+            if "previous" in self.input_grad_update:
+                grad = torch.concatenate((grad, self.format2D_3D(self.h_state)), dim=1)
+
+        elif "gradsplit" in self.input_grad_update:
+            prior_cost = self.prior_cost(state)
+            obs_cost = self.obs_cost(state, batch)
+            # Compute full gradient
+            grad_prior = torch.autograd.grad(prior_cost, state, create_graph=True)[0]
+            grad_obs = torch.autograd.grad(obs_cost, state, create_graph=True)[0]
+            grad = torch.concatenate((grad_prior, grad_obs), dim=1)
+            if "state" in self.input_grad_update:
+                grad = grad / ((grad**2).mean().sqrt().detach())
+                grad = torch.concatenate((grad, state), dim=1)
+
+        elif "grad" in self.input_grad_update:
+            var_cost = self.prior_cost(state) + self.lbd**2 * self.obs_cost(state, batch)
+            grad = torch.autograd.grad(var_cost, state, create_graph=True)[0]
+
+            if "state" in self.input_grad_update:
+                grad = grad / ((grad**2).mean().sqrt().detach())
+                grad = torch.concatenate((grad, self.format2D_3D(state)), dim=1)
+
+            if "previous" in self.input_grad_update:
+                grad = torch.concatenate((grad, self.format2D_3D(self.h_state)), dim=1)
+
+        elif self.input_grad_update == "obs-only":
+            grad = batch.input.nan_to_num()
+
+        elif self.input_grad_update == "obs+state":
+            grad = torch.concatenate(
+                (self.format2D_3D(state), self.format2D_3D(batch.input.nan_to_num())),
+                dim=1,
+            )
+
+        gmod = self.grad_mod(grad, timesteps=t, extra=None)
+        if hasattr(self.grad_mod, "dim_3d"):
+            if self.grad_mod.dim_3d:
+                gmod = gmod.squeeze(1)
+
+        state_update = alpha_step * gmod
+        if ("grad" in self.input_grad_update) and (self.lr_grad > 0.0):
+            state_update += self.lr_grad * (step + 1) / self.n_step * grad[:, : state.shape[1], :, :]
+
+        self.h_state = state_update
 
         return state - state_update
 
-    def forward(self, batch):
+    def forward(self, batch, x_init=None, h_state=None, phase="test"):
         """
         Perform the forward pass of the solver.
 
@@ -353,17 +453,104 @@ class GradSolver(nn.Module):
             torch.Tensor: Final optimized state.
         """
         with torch.set_grad_enabled(True):
-            state = self.init_state(batch)
+            state = self.init_state(batch, x_init=x_init)
+            self.init_h_state(batch, h_state=h_state)
             self.grad_mod.reset_state(batch.input)
 
-            for step in range(self.n_step):
-                state = self.solver_step(state, batch, step=step)
-                if not self.training:
-                    state = state.detach().requires_grad_(True)
-
             if not self.training:
-                state = self.prior_cost.forward_ae(state)
+                if ("subgrad" in self.input_grad_update) or ("grad" not in self.input_grad_update):
+                    state.requires_grad_(False)
+                    self.h_state.requires_grad_(False)
+
+            for step in range(self.n_step):
+                alpha_step = 1.0 / self.n_step
+                state = self.solver_step(state, batch, step=step / self.n_step, alpha_step=alpha_step)
+                if (not self.training) and ("grad" in self.input_grad_update):
+                    if "subgrad" in self.input_grad_update:
+                        state = state.detach().requires_grad_(False)
+                    else:
+                        state = state.detach().requires_grad_(True)
+
         return state
+
+
+# ===================================================
+# Modeles (UNET, ConvLSTM)
+# ===================================================
+
+class GradModelWithCondition(torch.nn.Module):
+    """
+    A generic conditional model for gradient modulation.
+
+    Attributes:
+        grad_model : grad update model
+    """
+
+    def __init__(self, grad_model=False, dropout=0.0, use_grad_norm=True):
+        """
+        Initialize the ConvLstmGradModel.
+
+        Args:
+            grad_model : grad update model
+        """
+        super().__init__()
+        self.grad_model = grad_model
+        self.dropout = torch.nn.Dropout(dropout)
+        self.use_grad_norm = use_grad_norm
+
+        if hasattr(self.grad_model, "dim_3d"):
+            self.dim_3d = self.grad_model.dim_3d
+
+        if hasattr(self.grad_model, "dims"):
+            if self.grad_model.dims == 3:
+                self.dim_3d = True
+
+    def reset_state(self, inp):
+        """
+        Args:
+            inp (torch.Tensor): Input tensor to determine state size.
+        """
+        # Initialize hidden and cell state for LSTM if use a ConvLstmGradModel, otherwise set to None
+        if hasattr(self.grad_model, "dim_hidden"):
+            size = [inp.shape[0], self.grad_model.dim_hidden, *inp.shape[-2:]]
+            if hasattr(self.grad_model, "downsamp"):
+                downsamp = self.grad_model.downsamp
+            else:
+                downsamp = None
+            self.down = nn.AvgPool2d(downsamp) if downsamp is not None else nn.Identity()
+            self._state = [
+                self.down(torch.zeros(size, device=inp.device)),
+                self.down(torch.zeros(size, device=inp.device)),
+            ]
+        else:
+            self._state = None, None
+
+        self._grad_norm = None
+
+    def forward(self, x, timesteps=None, extra=[]):
+        """
+        Perform the forward pass of the LSTM.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output tensor.
+        """
+
+        if self._grad_norm is None:
+            if self.use_grad_norm:
+                self._grad_norm = (x**2).mean().sqrt()
+            else:
+                self._grad_norm = 1.0
+
+        # print('self._grad_norm in GradModelWithCondition:', self._grad_norm, flush=True)
+        x = x / self._grad_norm
+        hidden, cell = self._state
+        x = self.dropout(x)
+        out = self.grad_model.predict(x, timesteps=timesteps, extra=extra, hidden=hidden, cell=cell)
+
+        return out
 
 
 class ConvLstmGradModel(nn.Module):
@@ -379,7 +566,7 @@ class ConvLstmGradModel(nn.Module):
         up (nn.Module): Upsampling layer.
     """
 
-    def __init__(self, dim_in, dim_hidden, kernel_size=3, dropout=0.1, downsamp=None):
+    def __init__(self, dim_in, dim_out, dim_hidden, kernel_size=3, dropout=0.1, downsamp=None):
         """
         Initialize the ConvLstmGradModel.
 
@@ -399,34 +586,14 @@ class ConvLstmGradModel(nn.Module):
             padding=kernel_size // 2,
         )
 
-        self.conv_out = torch.nn.Conv2d(
-            dim_hidden, dim_in, kernel_size=kernel_size, padding=kernel_size // 2
-        )
+        self.conv_out = torch.nn.Conv2d(dim_hidden, dim_out, kernel_size=kernel_size, padding=kernel_size // 2)
 
         self.dropout = torch.nn.Dropout(dropout)
         self._state = []
         self.down = nn.AvgPool2d(downsamp) if downsamp is not None else nn.Identity()
-        self.up = (
-            nn.UpsamplingBilinear2d(scale_factor=downsamp)
-            if downsamp is not None
-            else nn.Identity()
-        )
+        self.up = nn.UpsamplingBilinear2d(scale_factor=downsamp) if downsamp is not None else nn.Identity()
 
-    def reset_state(self, inp):
-        """
-        Reset the internal state of the LSTM.
-
-        Args:
-            inp (torch.Tensor): Input tensor to determine state size.
-        """
-        size = [inp.shape[0], self.dim_hidden, *inp.shape[-2:]]
-        self._grad_norm = None
-        self._state = [
-            self.down(torch.zeros(size, device=inp.device)),
-            self.down(torch.zeros(size, device=inp.device)),
-        ]
-
-    def forward(self, x):
+    def predict(self, x, timesteps=None, extra=[], hidden=None, cell=None):
         """
         Perform the forward pass of the LSTM.
 
@@ -436,19 +603,17 @@ class ConvLstmGradModel(nn.Module):
         Returns:
             torch.Tensor: Output tensor.
         """
-        if self._grad_norm is None:
-            self._grad_norm = (x**2).mean().sqrt()
-        x = x / self._grad_norm
-        hidden, cell = self._state
-        x = self.dropout(x)
+        # if self._grad_norm is None:
+        #     self._grad_norm = (x**2).mean().sqrt()
+        # x = x / self._grad_norm
+        # hidden, cell = self._state
+        # x = self.dropout(x)
         x = self.down(x)
         gates = self.gates(torch.cat((x, hidden), 1))
 
         in_gate, remember_gate, out_gate, cell_gate = gates.chunk(4, 1)
 
-        in_gate, remember_gate, out_gate = map(
-            torch.sigmoid, [in_gate, remember_gate, out_gate]
-        )
+        in_gate, remember_gate, out_gate = map(torch.sigmoid, [in_gate, remember_gate, out_gate])
         cell_gate = torch.tanh(cell_gate)
 
         cell = (remember_gate * cell) + (in_gate * cell_gate)
@@ -459,6 +624,10 @@ class ConvLstmGradModel(nn.Module):
         out = self.up(out)
         return out
 
+
+# ===================================================
+# Observation Cost and Prior Cost
+# ===================================================
 
 class BaseObsCost(nn.Module):
     """
@@ -522,33 +691,17 @@ class BilinAEPriorCost(nn.Module):
         """
         super().__init__()
         self.bilin_quad = bilin_quad
-        self.conv_in = nn.Conv2d(
-            dim_in, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2
-        )
-        self.conv_hidden = nn.Conv2d(
-            dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2
-        )
+        self.conv_in = nn.Conv2d(dim_in, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2)
+        self.conv_hidden = nn.Conv2d(dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2)
 
-        self.bilin_1 = nn.Conv2d(
-            dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2
-        )
-        self.bilin_21 = nn.Conv2d(
-            dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2
-        )
-        self.bilin_22 = nn.Conv2d(
-            dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2
-        )
+        self.bilin_1 = nn.Conv2d(dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2)
+        self.bilin_21 = nn.Conv2d(dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2)
+        self.bilin_22 = nn.Conv2d(dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2)
 
-        self.conv_out = nn.Conv2d(
-            2 * dim_hidden, dim_in, kernel_size=kernel_size, padding=kernel_size // 2
-        )
+        self.conv_out = nn.Conv2d(2 * dim_hidden, dim_in, kernel_size=kernel_size, padding=kernel_size // 2)
 
         self.down = nn.AvgPool2d(downsamp) if downsamp is not None else nn.Identity()
-        self.up = (
-            nn.UpsamplingBilinear2d(scale_factor=downsamp)
-            if downsamp is not None
-            else nn.Identity()
-        )
+        self.up = nn.UpsamplingBilinear2d(scale_factor=downsamp) if downsamp is not None else nn.Identity()
 
     def forward_ae(self, x):
         """
@@ -564,14 +717,8 @@ class BilinAEPriorCost(nn.Module):
         x = self.conv_in(x)
         x = self.conv_hidden(F.relu(x))
 
-        nonlin = (
-            self.bilin_21(x)**2
-            if self.bilin_quad
-            else (self.bilin_21(x) * self.bilin_22(x))
-        )
-        x = self.conv_out(
-            torch.cat([self.bilin_1(x), nonlin], dim=1)
-        )
+        nonlin = self.bilin_21(x) ** 2 if self.bilin_quad else (self.bilin_21(x) * self.bilin_22(x))
+        x = self.conv_out(torch.cat([self.bilin_1(x), nonlin], dim=1))
         x = self.up(x)
         return x
 
