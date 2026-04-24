@@ -1,9 +1,9 @@
 """
 This module provides data handling utilities for 4D-VarNet models.
 
-It includes classes and functions for creating datasets, augmenting data, 
-managing data loading pipelines, and reconstructing data from patches. 
-These utilities are designed to work seamlessly with PyTorch and xarray, 
+It includes classes and functions for creating datasets, augmenting data,
+managing data loading pipelines, and reconstructing data from patches.
+These utilities are designed to work seamlessly with PyTorch and xarray,
 enabling efficient data preprocessing and loading for machine learning tasks.
 
 Classes:
@@ -200,7 +200,7 @@ class XrDataset(torch.utils.data.Dataset):
 
         Args:
             batches (list): List of patches (torch tensor) corresponding to batches without shuffle.
-            weight (np.ndarray, optional): Tensor of size patch_dims corresponding to the weight of a prediction 
+            weight (np.ndarray, optional): Tensor of size patch_dims corresponding to the weight of a prediction
                 depending on the position on the patch (default to ones everywhere). Overlapping patches will
                 be averaged with weighting.
 
@@ -248,6 +248,102 @@ class XrDataset(torch.utils.data.Dataset):
             count_da.loc[da.coords] = count_da.sel(da.coords) + w
 
         return rec_da / count_da
+
+
+class LazyXrDataset(XrDataset):
+    def __init__(
+        self, das, patch_dims, domain_limits=None, strides=None,
+        postpro_fn=None, **kwargs,
+    ):
+        """
+        Initialize the LazyXrDataset.
+
+        Args:
+            das (dict): xr.DataArray to be used.
+            patch_dims (dict):  da dimension and sizes of patches to extract.
+            domain_limits (dict, optional): da dimension slices of domain, to Limits for selecting a subset of the domain. for patch extractions
+            strides (dict, optional): dims to strides size for patch extraction. (default to one)
+            postpro_fn (callable, optional): A function for post-processing extracted patches.
+        """
+        self.return_coords = False
+        self.postpro_fn = postpro_fn
+        self.da = {k: v.sel(**(domain_limits)) for (k, v) in das.items()}
+        self._check_dims_and_coords()
+        self.patch_dims = patch_dims
+        self.strides = strides or {}
+        ref = next(iter(self.da))
+        da_dims = dict(zip(self.da[ref].dims, self.da[ref].shape))
+        self.ds_size = {
+            dim: max((da_dims[dim] - patch_dims[dim]) // self.strides.get(dim, 1) + 1, 0)
+            for dim in patch_dims
+        }
+
+    def __getitem__(self, item):
+        """
+        Get a specific patch by index.
+
+        Args:
+            item (int): Index of the patch.
+
+        Returns:
+            Patch data or coordinates, depending on the mode.
+        """
+        sl = {}
+        _zip = zip(
+            self.ds_size.keys(),
+            np.unravel_index(item, tuple(self.ds_size.values())),
+        )
+
+        for dim, idx in _zip:
+            sl[dim] = slice(
+                self.strides.get(dim, 1) * idx,
+                self.strides.get(dim, 1) * idx + self.patch_dims[dim]
+            )
+
+        ref = next(iter(self.da))
+
+        if self.return_coords:
+            item = self.da[ref].isel(**sl)
+            return item.coords.to_dataset()[list(self.patch_dims)]
+
+        item = (
+            xr.Dataset(
+                data_vars={k: v.isel(**sl) for (k, v) in self.da.items()},
+                coords=self.da[ref].isel(**sl).coords,
+            )
+            .to_dataarray()
+            .sortby('variable')
+            .data
+            .astype(np.float32)
+        )
+
+        if self.postpro_fn is not None:
+            return self.postpro_fn(item)
+        return item
+
+    def _check_dims_and_coords(self):
+        """
+        Check that `self.da`'s xr.DataArrays all share the same dims and
+        coords.
+        """
+        ref = next(iter(self.da))
+        ref_val = self.da[ref]
+
+        for k, v in self.da.items():
+            if ref == k:
+                continue
+
+            if ref_val.dims != v.dims:
+                raise ValueError(
+                    "All provided xr.DataArray must share the same dimensions "
+                    + f"({ref} != {k})"
+                )
+
+            if not ref_val.coords.equals(v.coords):
+                raise ValueError(
+                    "All provided xr.DataArray must share the same coordinates "
+                    + f"({ref} != {k})"
+                )
 
 
 class XrConcatDataset(torch.utils.data.ConcatDataset):
@@ -471,6 +567,50 @@ class BaseDataModule(pl.LightningDataModule):
             DataLoader: Testing DataLoader.
         """
         return torch.utils.data.DataLoader(self.test_ds, shuffle=False, **self.dl_kw)
+
+
+class LazyDataModule(BaseDataModule):
+
+    def __init__(self, *args, **kwargs):
+        """
+        See BaseDataModule.__init__.
+
+        Differences are:
+        - `input_da` must contain a xr.Dataset-valued dictionary;
+        - `norm_stats` must be indicated, otherwise a TypeError will be
+            raised.
+        """
+        super().__init__(*args, **kwargs)
+
+        if self._norm_stats is None:
+            raise TypeError(
+                "Normalisation parameters (argument `norm_stats`) must "
+                + "be provided in lazy loading"
+            )
+
+    def setup(self, stage='test'):
+        """
+        Set up the datasets for training, validation, and testing.
+
+        Args:
+            stage (str, optional): Stage of the setup ('train', 'val', 'test').
+        """
+        post_fn = self.post_fn()
+        self.train_ds = LazyXrDataset(
+            {k: v.sel(self.domains['train']) for (k, v) in self.input_da.items()},
+            **self.xrds_kw, postpro_fn=post_fn,
+        )
+        if self.aug_kw:
+            self.train_ds = AugmentedDataset(self.train_ds, **self.aug_kw)
+
+        self.val_ds = LazyXrDataset(
+            {k: v.sel(self.domains['val']) for (k, v) in self.input_da.items()},
+            **self.xrds_kw, postpro_fn=post_fn,
+        )
+        self.test_ds = LazyXrDataset(
+            {k: v.sel(self.domains['test']) for (k, v) in self.input_da.items()},
+            **self.xrds_kw, postpro_fn=post_fn,
+        )
 
 
 class ConcatDataModule(BaseDataModule):
