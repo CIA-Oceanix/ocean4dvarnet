@@ -164,11 +164,9 @@ class LitModel(pl.LightningModule):
         grad_loss = self.weighted_mse(kfilts.sobel(out) - kfilts.sobel(batch.tgt), self.rec_weight)
 
         with torch.no_grad():
-            self.log(
-                f"{phase}_mse", 10000 * loss * self.norm_stats[1] ** 2, prog_bar=True, on_step=False, on_epoch=True
-            )
-            self.log(f"{phase}_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
-            self.log(f"{phase}_gloss", grad_loss, prog_bar=True, on_step=False, on_epoch=True)
+            self.log(f"{phase}_mse", 10000 * loss * self.norm_stats[1]**2, prog_bar=True, on_step=False, on_epoch=True)
+            self.log(f"{phase}_loss", loss, prog_bar=False, on_step=False, on_epoch=True)
+            self.log(f"{phase}_gloss", grad_loss, prog_bar=False, on_step=False, on_epoch=True)
 
         return 50 * loss + 1000 * grad_loss
 
