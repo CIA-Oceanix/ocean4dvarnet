@@ -109,6 +109,30 @@ def half_lr_adam(lit_mod, lr):
         ],
     )
 
+def cosanneal_lr_adam_base(lit_mod, lr, T_max=100, weight_decay=0.):
+    """
+    Configure an Adam optimizer with cosine annealing learning rate scheduling.
+
+    Args:
+        lit_mod: The Lightning module containing the model.
+        lr (float): The base learning rate.
+        T_max (int): Maximum number of iterations for the scheduler.
+        weight_decay (float): Weight decay for the optimizer.
+
+    Returns:
+        dict: A dictionary containing the optimizer and scheduler.
+    """
+    opt = torch.optim.Adam(
+        [
+            {"params": lit_mod.parameters(), "lr": lr},
+        ], weight_decay=weight_decay
+    )
+    return {
+        "optimizer": opt,
+        "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(
+            opt, T_max=T_max
+        ),
+    }
 
 def cosanneal_lr_adam(lit_mod, lr, T_max=100, weight_decay=0.):
     """
