@@ -7,6 +7,7 @@ using deep learning and PyTorch Lightning.
 """
 
 from pathlib import Path
+import omegaconf
 import pandas as pd
 import pytorch_lightning as pl
 import kornia.filters as kfilts
@@ -163,8 +164,13 @@ class LitModel(pl.LightningModule):
         loss = self.weighted_mse(out - batch.tgt, self.rec_weight)
         grad_loss = self.weighted_mse(kfilts.sobel(out) - kfilts.sobel(batch.tgt), self.rec_weight)
 
+        if isinstance(self.norm_stats, omegaconf.dictconfig.DictConfig):
+            std = self.norm_stats[phase][1]
+        else:
+            std = self.norm_stats[1]
+
         with torch.no_grad():
-            self.log(f"{phase}_mse", 10000 * loss * self.norm_stats[1]**2, prog_bar=True, on_step=False, on_epoch=True)
+            self.log(f"{phase}_mse", 10000 * loss * std**2, prog_bar=True, on_step=False, on_epoch=True)
             self.log(f"{phase}_loss", loss, prog_bar=False, on_step=False, on_epoch=True)
             self.log(f"{phase}_gloss", grad_loss, prog_bar=False, on_step=False, on_epoch=True)
 
@@ -190,7 +196,11 @@ class LitModel(pl.LightningModule):
         if batch_idx == 0:
             self.test_data = []
         out = self(batch=batch)
-        m, s = self.norm_stats
+
+        if isinstance(self.norm_stats, omegaconf.dictconfig.DictConfig):
+            m, s = self.norm_stats['test']
+        else:
+            m, s = self.norm_stats
 
         self.test_data.append(
             torch.stack(

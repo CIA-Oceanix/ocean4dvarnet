@@ -233,13 +233,13 @@ class XrDataset(torch.utils.data.Dataset):
         das = [xr.DataArray(it.numpy(), dims=dims, coords=co.coords)
                for it, co in zip(items, coords)]
 
-        da_shape = dict(zip(coords[0].dims, self.da.shape[-len(coords[0].dims):]))
+        da_shape = dict(zip(coords[0].dims, self._get_da_sample().shape[-len(coords[0].dims):]))
         new_shape = dict(zip(new_dims, items[0].shape[:len(new_dims)]))
 
         rec_da = xr.DataArray(
             np.zeros([*new_shape.values(), *da_shape.values()]),
             dims=dims,
-            coords={d: self.da[d] for d in self.patch_dims}
+            coords={d: self._get_da_sample()[d] for d in self.patch_dims}
         )
         count_da = xr.zeros_like(rec_da)
 
@@ -248,6 +248,9 @@ class XrDataset(torch.utils.data.Dataset):
             count_da.loc[da.coords] = count_da.sel(da.coords) + w
 
         return rec_da / count_da
+
+    def _get_da_sample(self):
+        return self.da
 
 
 class LazyXrDataset(XrDataset):
@@ -344,6 +347,9 @@ class LazyXrDataset(XrDataset):
                     "All provided xr.DataArray must share the same coordinates "
                     + f"({ref} != {k})"
                 )
+
+    def _get_da_sample(self):
+        return self.da[next(iter(self.da))]
 
 
 class XrConcatDataset(torch.utils.data.ConcatDataset):
@@ -595,22 +601,51 @@ class LazyDataModule(BaseDataModule):
         Args:
             stage (str, optional): Stage of the setup ('train', 'val', 'test').
         """
-        post_fn = self.post_fn()
         self.train_ds = LazyXrDataset(
             {k: v.sel(self.domains['train']) for (k, v) in self.input_da.items()},
-            **self.xrds_kw, postpro_fn=post_fn,
+            **self.xrds_kw, postpro_fn=self.post_fn('train'),
         )
         if self.aug_kw:
             self.train_ds = AugmentedDataset(self.train_ds, **self.aug_kw)
 
         self.val_ds = LazyXrDataset(
             {k: v.sel(self.domains['val']) for (k, v) in self.input_da.items()},
-            **self.xrds_kw, postpro_fn=post_fn,
+            **self.xrds_kw, postpro_fn=self.post_fn('val'),
         )
         self.test_ds = LazyXrDataset(
             {k: v.sel(self.domains['test']) for (k, v) in self.input_da.items()},
-            **self.xrds_kw, postpro_fn=post_fn,
+            **self.xrds_kw, postpro_fn=self.post_fn('test'),
         )
+
+    def norm_stats(self, phase=None):
+        """
+        Compute or retrieve normalization statistics (mean, std).
+
+        Returns:
+            tuple: Normalization statistics (mean, std).
+        """
+        if self._norm_stats is None:
+            self._norm_stats = self.train_mean_std()
+            print("Norm stats", self._norm_stats)
+        return self._norm_stats[phase]
+
+
+    def post_fn(self, phase=None):
+        """
+        Create a post-processing function for normalizing data depending
+        on the dataset (training, validation or test dataset).
+
+        Returns:
+            callable: Post-processing function.
+        """
+        m, s = self.norm_stats(phase)
+        def normalize(item): return (item - m) / s
+        return ft.partial(ft.reduce, lambda i, f: f(i), [
+            TrainingItem._make,
+            lambda item: item._replace(tgt=normalize(item.tgt)),
+            lambda item: item._replace(input=normalize(item.input)),
+        ])
+
 
 
 class ConcatDataModule(BaseDataModule):
