@@ -4,12 +4,6 @@ This module defines models and solvers for 4D-VarNet.
 4D-VarNet is a framework for solving inverse problems in data assimilation
 using deep learning and PyTorch Lightning.
 
-Classes:
-    Lit4dVarNet: A PyTorch Lightning module for training and testing 4D-VarNet models.
-    GradSolver: A gradient-based solver for optimization in 4D-VarNet.
-    ConvLstmGradModel: A convolutional LSTM model for gradient modulation.
-    BaseObsCost: A base class for observation cost computation.
-    BilinAEPriorCost: A prior cost model using bilinear autoencoders.
 """
 
 from pathlib import Path
@@ -274,7 +268,7 @@ class Lit4dVarNet(LitModel):
 
 class GradSolver(nn.Module):
     """
-    A gradient-based solver for optimization in unrolled architectures.
+    Gradient-based solver for optimization within unrolled architectures.
 
     Attributes:
         prior_cost (nn.Module, optional): The prior cost function.
@@ -283,7 +277,19 @@ class GradSolver(nn.Module):
         n_step (int): Number of optimization steps.
         lr_grad (float): Learning rate for gradient updates.
         lbd (float): Regularization parameter.
-
+        input_grad_update (str): Specifies which quantities are used as
+            input to the gradient update module. Possible values include:
+            - "state"           : current state only
+            - "obs+state"       : observation and state
+            - "obs-only"        : observation only
+            - "subgrad"         : subgradient only
+            - "subgrad+state"   : subgradient and state
+            - "grad"            : gradient only
+            - "grad+state"      : gradient and state
+            - "gradsplit"       : split gradient components
+            - "gradsplit+state" : split gradients and state
+        std_init (float): standard deviation used to initialize the
+            optimization state.
     """
 
     def __init__(
@@ -292,7 +298,7 @@ class GradSolver(nn.Module):
         n_step,
         lr_grad=0.2,
         lbd=1.0,
-        input_grad_update="state",
+        input_grad_update="grad",
         std_init=0.1,
         prior_cost: Optional[nn.Module] = None,
         obs_cost: Optional[nn.Module] = None,
@@ -429,7 +435,10 @@ class GradSolver(nn.Module):
                 dim=1,
             )
 
-        gmod = self.grad_mod(grad, timesteps=t, extra=None)
+        if isinstance(self.grad_mod, ConvLstmGradModel):
+            gmod = self.grad_mod(grad)
+        else:
+            gmod = self.grad_mod(grad, timesteps=t, extra=None)
         if hasattr(self.grad_mod, "dim_3d"):
             if self.grad_mod.dim_3d:
                 gmod = gmod.squeeze(1)
@@ -473,10 +482,105 @@ class GradSolver(nn.Module):
 
         return state
 
+# ===================================================
+# Modeles (Unrolling for Unet, ConvLSTM)
+# ===================================================
 
-# ===================================================
-# Modeles (UNET, ConvLSTM)
-# ===================================================
+class ConvLstmGradModel(nn.Module):
+    """
+    A convolutional LSTM model for gradient modulation.
+
+    Attributes:
+        dim_hidden (int): Number of hidden dimensions.
+        gates (nn.Conv2d): Convolutional gates for LSTM.
+        conv_out (nn.Conv2d): Output convolutional layer.
+        dropout (nn.Dropout): Dropout layer.
+        down (nn.Module): Downsampling layer.
+        up (nn.Module): Upsampling layer.
+    """
+
+    def __init__(self, dim_in, dim_out=None, dim_hidden=48, kernel_size=3, dropout=0.1, downsamp=None):
+        """
+        Initialize the ConvLstmGradModel.
+
+        Args:
+            dim_in (int): Number of input dimensions.
+            dim_out (int): Number of output dimensions.
+            dim_hidden (int): Number of hidden dimensions.
+            kernel_size (int, optional): Kernel size for convolutions. Defaults to 3.
+            dropout (float, optional): Dropout rate. Defaults to 0.1.
+            downsamp (int, optional): Downsampling factor. Defaults to None.
+        """
+        super().__init__()
+        self.dim_hidden = dim_hidden
+        self.gates = torch.nn.Conv2d(
+            dim_in + dim_hidden,
+            4 * dim_hidden,
+            kernel_size=kernel_size,
+            padding=kernel_size // 2,
+        )
+
+        dim_out = dim_out if dim_out is not None else dim_in
+        self.conv_out = torch.nn.Conv2d(
+            dim_hidden, dim_out, kernel_size=kernel_size, padding=kernel_size // 2
+        )
+
+        self.dropout = torch.nn.Dropout(dropout)
+        self._state = []
+        self.down = nn.AvgPool2d(downsamp) if downsamp is not None else nn.Identity()
+        self.up = (
+            nn.UpsamplingBilinear2d(scale_factor=downsamp)
+            if downsamp is not None
+            else nn.Identity()
+        )
+
+    def reset_state(self, inp):
+        """
+        Reset the internal state of the LSTM.
+
+        Args:
+            inp (torch.Tensor): Input tensor to determine state size.
+        """
+        size = [inp.shape[0], self.dim_hidden, *inp.shape[-2:]]
+        self._grad_norm = None
+        self._state = [
+            self.down(torch.zeros(size, device=inp.device)),
+            self.down(torch.zeros(size, device=inp.device)),
+        ]
+
+    def forward(self, x):
+        """
+        Perform the forward pass of the LSTM.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output tensor.
+        """
+        if self._grad_norm is None:
+            self._grad_norm = (x**2).mean().sqrt()
+        x = x / self._grad_norm
+        hidden, cell = self._state
+        x = self.dropout(x)
+        x = self.down(x)
+        gates = self.gates(torch.cat((x, hidden), 1))
+
+        in_gate, remember_gate, out_gate, cell_gate = gates.chunk(4, 1)
+
+        in_gate, remember_gate, out_gate = map(
+            torch.sigmoid, [in_gate, remember_gate, out_gate]
+        )
+        cell_gate = torch.tanh(cell_gate)
+
+        cell = (remember_gate * cell) + (in_gate * cell_gate)
+        hidden = out_gate * torch.tanh(cell)
+
+        self._state = hidden, cell
+        out = self.conv_out(hidden)
+        out = self.up(out)
+        return out
+
 
 class GradModelWithCondition(torch.nn.Module):
     """
@@ -486,7 +590,7 @@ class GradModelWithCondition(torch.nn.Module):
         grad_model : grad update model
     """
 
-    def __init__(self, grad_model=False, dropout=0.0, use_grad_norm=True):
+    def __init__(self, grad_model=False, dropout=0.,use_grad_norm=True):
         """
         Initialize the ConvLstmGradModel.
 
@@ -498,34 +602,22 @@ class GradModelWithCondition(torch.nn.Module):
         self.dropout = torch.nn.Dropout(dropout)
         self.use_grad_norm = use_grad_norm
 
-        if hasattr(self.grad_model, "dim_3d"):
+        if hasattr(self.grad_model, 'dim_3d') == True:
             self.dim_3d = self.grad_model.dim_3d
 
-        if hasattr(self.grad_model, "dims"):
+        if hasattr(self.grad_model, 'dims') == True:
             if self.grad_model.dims == 3:
                 self.dim_3d = True
 
     def reset_state(self, inp):
         """
+        Reset the internal state of the LSTM.
+
         Args:
             inp (torch.Tensor): Input tensor to determine state size.
         """
-        # Initialize hidden and cell state for LSTM if use a ConvLstmGradModel, otherwise set to None
-        if hasattr(self.grad_model, "dim_hidden"):
-            size = [inp.shape[0], self.grad_model.dim_hidden, *inp.shape[-2:]]
-            if hasattr(self.grad_model, "downsamp"):
-                downsamp = self.grad_model.downsamp
-            else:
-                downsamp = None
-            self.down = nn.AvgPool2d(downsamp) if downsamp is not None else nn.Identity()
-            self._state = [
-                self.down(torch.zeros(size, device=inp.device)),
-                self.down(torch.zeros(size, device=inp.device)),
-            ]
-        else:
-            self._state = None, None
-
         self._grad_norm = None
+
 
     def forward(self, x, timesteps=None, extra=[]):
         """
@@ -542,92 +634,20 @@ class GradModelWithCondition(torch.nn.Module):
             if self.use_grad_norm:
                 self._grad_norm = (x**2).mean().sqrt()
             else:
-                self._grad_norm = 1.0
+                self._grad_norm = 1.
 
-        # print('self._grad_norm in GradModelWithCondition:', self._grad_norm, flush=True)
+        #print('self._grad_norm in GradModelWithCondition:', self._grad_norm, flush=True)
         x = x / self._grad_norm
-        hidden, cell = self._state
+
         x = self.dropout(x)
-        out = self.grad_model.predict(x, timesteps=timesteps, extra=extra, hidden=hidden, cell=cell)
+        out = self.grad_model.predict(x, timesteps=timesteps, extra=extra)
 
-        return out
-
-
-class ConvLstmGradModel(nn.Module):
-    """
-    A convolutional LSTM model for gradient modulation.
-
-    Attributes:
-        dim_hidden (int): Number of hidden dimensions.
-        gates (nn.Conv2d): Convolutional gates for LSTM.
-        conv_out (nn.Conv2d): Output convolutional layer.
-        dropout (nn.Dropout): Dropout layer.
-        down (nn.Module): Downsampling layer.
-        up (nn.Module): Upsampling layer.
-    """
-
-    def __init__(self, dim_in, dim_out, dim_hidden, kernel_size=3, dropout=0.1, downsamp=None):
-        """
-        Initialize the ConvLstmGradModel.
-
-        Args:
-            dim_in (int): Number of input dimensions.
-            dim_hidden (int): Number of hidden dimensions.
-            kernel_size (int, optional): Kernel size for convolutions. Defaults to 3.
-            dropout (float, optional): Dropout rate. Defaults to 0.1.
-            downsamp (int, optional): Downsampling factor. Defaults to None.
-        """
-        super().__init__()
-        self.dim_hidden = dim_hidden
-        self.gates = torch.nn.Conv2d(
-            dim_in + dim_hidden,
-            4 * dim_hidden,
-            kernel_size=kernel_size,
-            padding=kernel_size // 2,
-        )
-
-        self.conv_out = torch.nn.Conv2d(dim_hidden, dim_out, kernel_size=kernel_size, padding=kernel_size // 2)
-
-        self.dropout = torch.nn.Dropout(dropout)
-        self._state = []
-        self.down = nn.AvgPool2d(downsamp) if downsamp is not None else nn.Identity()
-        self.up = nn.UpsamplingBilinear2d(scale_factor=downsamp) if downsamp is not None else nn.Identity()
-
-    def predict(self, x, timesteps=None, extra=[], hidden=None, cell=None):
-        """
-        Perform the forward pass of the LSTM.
-
-        Args:
-            x (torch.Tensor): Input tensor.
-
-        Returns:
-            torch.Tensor: Output tensor.
-        """
-        # if self._grad_norm is None:
-        #     self._grad_norm = (x**2).mean().sqrt()
-        # x = x / self._grad_norm
-        # hidden, cell = self._state
-        # x = self.dropout(x)
-        x = self.down(x)
-        gates = self.gates(torch.cat((x, hidden), 1))
-
-        in_gate, remember_gate, out_gate, cell_gate = gates.chunk(4, 1)
-
-        in_gate, remember_gate, out_gate = map(torch.sigmoid, [in_gate, remember_gate, out_gate])
-        cell_gate = torch.tanh(cell_gate)
-
-        cell = (remember_gate * cell) + (in_gate * cell_gate)
-        hidden = out_gate * torch.tanh(cell)
-
-        self._state = hidden, cell
-        out = self.conv_out(hidden)
-        out = self.up(out)
         return out
 
 
 # ===================================================
 # Observation Cost and Prior Cost
-# ===================================================
+# ====================================================
 
 class BaseObsCost(nn.Module):
     """
@@ -691,17 +711,33 @@ class BilinAEPriorCost(nn.Module):
         """
         super().__init__()
         self.bilin_quad = bilin_quad
-        self.conv_in = nn.Conv2d(dim_in, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2)
-        self.conv_hidden = nn.Conv2d(dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2)
+        self.conv_in = nn.Conv2d(
+            dim_in, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2
+        )
+        self.conv_hidden = nn.Conv2d(
+            dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2
+        )
 
-        self.bilin_1 = nn.Conv2d(dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2)
-        self.bilin_21 = nn.Conv2d(dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2)
-        self.bilin_22 = nn.Conv2d(dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2)
+        self.bilin_1 = nn.Conv2d(
+            dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2
+        )
+        self.bilin_21 = nn.Conv2d(
+            dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2
+        )
+        self.bilin_22 = nn.Conv2d(
+            dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2
+        )
 
-        self.conv_out = nn.Conv2d(2 * dim_hidden, dim_in, kernel_size=kernel_size, padding=kernel_size // 2)
+        self.conv_out = nn.Conv2d(
+            2 * dim_hidden, dim_in, kernel_size=kernel_size, padding=kernel_size // 2
+        )
 
         self.down = nn.AvgPool2d(downsamp) if downsamp is not None else nn.Identity()
-        self.up = nn.UpsamplingBilinear2d(scale_factor=downsamp) if downsamp is not None else nn.Identity()
+        self.up = (
+            nn.UpsamplingBilinear2d(scale_factor=downsamp)
+            if downsamp is not None
+            else nn.Identity()
+        )
 
     def forward_ae(self, x):
         """
@@ -717,8 +753,14 @@ class BilinAEPriorCost(nn.Module):
         x = self.conv_in(x)
         x = self.conv_hidden(F.relu(x))
 
-        nonlin = self.bilin_21(x) ** 2 if self.bilin_quad else (self.bilin_21(x) * self.bilin_22(x))
-        x = self.conv_out(torch.cat([self.bilin_1(x), nonlin], dim=1))
+        nonlin = (
+            self.bilin_21(x)**2
+            if self.bilin_quad
+            else (self.bilin_21(x) * self.bilin_22(x))
+        )
+        x = self.conv_out(
+            torch.cat([self.bilin_1(x), nonlin], dim=1)
+        )
         x = self.up(x)
         return x
 
