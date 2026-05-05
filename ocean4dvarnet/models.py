@@ -313,7 +313,7 @@ class GradSolver(nn.Module):
         n_step,
         lr_grad=0.2,
         lbd=1.0,
-        input_grad_update="state",
+        input_grad_update="grad",
         std_init=0.1,
         prior_cost: Optional[nn.Module] = None,
         obs_cost: Optional[nn.Module] = None,
@@ -450,7 +450,7 @@ class GradSolver(nn.Module):
                 dim=1,
             )
 
-        if hasattr(self.grad_mod, "dim_hidden"):
+        if isinstance(self.grad_mod, ConvLstmGradModel):
             gmod = self.grad_mod(grad)
         else:
             gmod = self.grad_mod(grad, timesteps=t, extra=None)
