@@ -1,7 +1,7 @@
 """
 This module defines models and solvers for 4D-VarNet.
 
-4D-VarNet is a framework for solving inverse problems in data assimilation 
+4D-VarNet is a framework for solving inverse problems in data assimilation
 using deep learning and PyTorch Lightning.
 
 """
@@ -270,41 +270,26 @@ class GradSolver(nn.Module):
     """
     Gradient-based solver for optimization within unrolled architectures.
 
-    Parameters
-    ----------
-    prior_cost : nn.Module, optional
-        Module defining the prior cost function (regularization term).
-
-    obs_cost : nn.Module, optional
-        Module defining the observation cost function (data fidelity term).
-
-    grad_mod : nn.Module
-        Neural network used to modulate or transform the computed gradients.
-
-    n_step : int
-        Number of iterative optimization steps (unrolled iterations).
-
-    lr_grad : float
-        Learning rate applied to gradient-based updates.
-
-    lbd : float
-        Regularization weight balancing prior and observation terms.
-
-    input_grad_update : str
-        Specifies which quantities are used as input to the gradient update module.
-        Possible values include:
-            - "state"              : current state only
-            - "obs+state"          : observation and state
-            - "obs-only"           : observation only
-            - "subgrad"            : subgradient only
-            - "subgrad+state"      : subgradient and state
-            - "grad"               : gradient only
-            - "grad+state"         : gradient and state
-            - "gradsplit"          : split gradient components
-            - "gradsplit+state"    : split gradients and state
-
-    std_init : float
-        Standard deviation used to initialize the optimization state.
+    Attributes:
+        prior_cost (nn.Module, optional): The prior cost function.
+        obs_cost (nn.Module, optional): The observation cost function.
+        grad_mod (nn.Module): The gradient modulation model.
+        n_step (int): Number of optimization steps.
+        lr_grad (float): Learning rate for gradient updates.
+        lbd (float): Regularization parameter.
+        input_grad_update (str): Specifies which quantities are used as
+            input to the gradient update module. Possible values include:
+            - "state"           : current state only
+            - "obs+state"       : observation and state
+            - "obs-only"        : observation only
+            - "subgrad"         : subgradient only
+            - "subgrad+state"   : subgradient and state
+            - "grad"            : gradient only
+            - "grad+state"      : gradient and state
+            - "gradsplit"       : split gradient components
+            - "gradsplit+state" : split gradients and state
+        std_init (float): standard deviation used to initialize the
+            optimization state.
     """
 
     def __init__(
