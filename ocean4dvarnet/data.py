@@ -664,18 +664,18 @@ class LazyDataModule(BaseDataModule):
         """
         self.train_ds = LazyXrDataset(
             {k: v.sel(self.domains['train']) for (k, v) in self.input_da.items()},
-            **self.xrds_kw, postpro_fn=self.post_fn('train'),
+            **self.xrds_kw["train"], postpro_fn=self.post_fn('train'),
         )
         if self.aug_kw:
             self.train_ds = AugmentedDataset(self.train_ds, **self.aug_kw)
 
         self.val_ds = LazyXrDataset(
             {k: v.sel(self.domains['val']) for (k, v) in self.input_da.items()},
-            **self.xrds_kw, postpro_fn=self.post_fn('val'),
+            **self.xrds_kw["val"], postpro_fn=self.post_fn('val'),
         )
         self.test_ds = LazyXrDataset(
             {k: v.sel(self.domains['test']) for (k, v) in self.input_da.items()},
-            **self.xrds_kw, postpro_fn=self.post_fn('test'),
+            **self.xrds_kw["test"], postpro_fn=self.post_fn('test'),
         )
 
     def norm_stats(self, phase=None):
