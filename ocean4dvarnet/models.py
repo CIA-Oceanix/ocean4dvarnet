@@ -33,10 +33,11 @@ class LitModel(pl.LightningModule):
         pre_metric_fn (callable): Preprocessing function for metrics.
         norm_stats (tuple): Normalization statistics (mean, std).
         persist_rw (bool): Whether to persist reconstruction weight as a buffer.
+        nanlim (float): Threshold of "nan" below which, a batch is discarded.
     """
 
     def __init__(
-        self, solver, rec_weight, opt_fn, test_metrics=None, pre_metric_fn=None, norm_stats=None, persist_rw=True
+        self, solver, rec_weight, opt_fn, test_metrics=None, pre_metric_fn=None, norm_stats=None, persist_rw=True, nanlim=.5
     ):
         """
         Initialize the Lit4dVarNet module.
@@ -58,6 +59,7 @@ class LitModel(pl.LightningModule):
         self.opt_fn = opt_fn
         self.metrics = test_metrics or {}
         self.pre_metric_fn = pre_metric_fn or (lambda x: x)
+        self.nanlim = nanlim
 
     @property
     def norm_stats(self):
@@ -142,7 +144,7 @@ class LitModel(pl.LightningModule):
         Returns:
             tuple: Loss and output tensor.
         """
-        if self.training and batch.tgt.isfinite().float().mean() < 0.9:
+        if self.training and batch.tgt.isfinite().float().mean() < self.nanlim:
             return None, None
 
         out = self(batch=batch)
