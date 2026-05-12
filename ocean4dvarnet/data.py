@@ -263,10 +263,20 @@ class LazyXrDataset(XrDataset):
 
         Args:
             das (dict): xr.DataArray to be used.
-            patch_dims (dict):  da dimension and sizes of patches to extract.
-            domain_limits (dict, optional): da dimension slices of domain, to Limits for selecting a subset of the domain. for patch extractions
-            strides (dict, optional): dims to strides size for patch extraction. (default to one)
-            postpro_fn (callable, optional): A function for post-processing extracted patches.
+            patch_dims (dict): da dimension and sizes of patches to extract.
+            domain_limits (dict, optional): da dimension slices of domain, to
+                Limits for selecting a subset of the domain. for patch
+                extractions
+            strides (dict, optional): dims to strides size for patch extraction.
+                (default to one)
+            postpro_fn (callable, optional): A function for post-processing
+                extracted patches.
+            edges (dict): if the theoretical coverage of a patch exceeds
+                the domain's limits, this parameter can fill the "blank"
+                area of the patch by repeating the other side of the
+                domain ("periodic") or fill the gap with `nan` values
+                ("fill_nan")).
+                Example: `edges=dict(lat="fill_nan", lon="periodic")`.
         """
         self.return_coords = False
         self.postpro_fn = postpro_fn
@@ -280,6 +290,20 @@ class LazyXrDataset(XrDataset):
             dim: max((da_dims[dim] - patch_dims[dim]) // self.strides.get(dim, 1) + 1, 0)
             for dim in patch_dims
         }
+
+        # If an edge-behaviour is specified for a dimension, increment
+        # by one self.ds_size along this dimension
+        self.edges = kwargs.get('edges', dict())
+        for dim, behaviour in self.edges.items():
+            if behaviour not in ('periodic', 'fill_nan'):
+                raise ValueError(
+                    f"edges[{dim}] must be either 'periodic' or 'fill_nan', "
+                    + f"got {behaviour}"
+                )
+
+            if (da_dims[dim] - patch_dims[dim]) % strides[dim] != 0:
+                self.ds_size[dim] += 1
+
 
     def __getitem__(self, item):
         """
@@ -304,15 +328,46 @@ class LazyXrDataset(XrDataset):
             )
 
         ref = next(iter(self.da))
+        sliced_domain = self.da[ref].isel(**sl)
 
         if self.return_coords:
-            item = self.da[ref].isel(**sl)
+            item = sliced_domain
             return item.coords.to_dataset()[list(self.patch_dims)]
+
+        das = {k: self.da[k].isel(**sl) for k in self.da}
+
+        # Handling edge behaviour
+        for dim, behaviour in self.edges.items():
+            if len(sliced_domain) >= self.patch_dims[dim]:
+                continue
+            offset = self.patch_dims[dim] - len(sliced_domain[dim])
+
+            if behaviour == 'periodic':
+                sl[dim] = slice(
+                    sl[dim].start - offset, sl[dim].stop - offset,
+                )
+
+                for var in das:
+                    das[var] = (
+                        self.da[var]
+                        .isel(time=sl['time'])  # TODO How to make it generic?
+                        .roll({dim: -offset})
+                        .assign_coords({dim: lambda x: x[dim] - offset})
+                        .sortby(dim)
+                        .isel({k: v for k, v in sl.items() if k != 'time'})
+                    )
+            elif behaviour == 'fill_nan':
+                for var in das:
+                    das[var] = das[var].pad(
+                        pad_width=dict({dim: (0, offset)}),
+                        mode='constant',
+                        constant_values=np.nan,
+                    )
 
         item = (
             xr.Dataset(
-                data_vars={k: v.isel(**sl) for (k, v) in self.da.items()},
-                coords=self.da[ref].isel(**sl).coords,
+                data_vars=das,
+                coords=next(iter(das.values())).coords,
             )
             .to_dataarray()
             .sortby('variable')
@@ -588,6 +643,12 @@ class LazyDataModule(BaseDataModule):
         """
         super().__init__(*args, **kwargs)
 
+        if not isinstance(self.input_da, dict):
+            raise TypeError(
+                "Argument `input_da` is expected to be a `dict`, "
+                + f"got `{type(self.input_da)}`."
+            )
+
         if self._norm_stats is None:
             raise TypeError(
                 "Normalisation parameters (argument `norm_stats`) must "
@@ -645,7 +706,6 @@ class LazyDataModule(BaseDataModule):
             lambda item: item._replace(tgt=normalize(item.tgt)),
             lambda item: item._replace(input=normalize(item.input)),
         ])
-
 
 
 class ConcatDataModule(BaseDataModule):
