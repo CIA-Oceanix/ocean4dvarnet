@@ -688,3 +688,17 @@ def load_cfg(xp_dir):
         return None, None
 
     return cfg, OmegaConf.select(hydra_cfg, "runtime.choices.xp")
+
+
+
+def load_sea_level_anomaly(tgt_path, inp_path, tgt_var="sla", inp_var="sla"):
+    isel = None
+
+    tgt = (
+        xr.open_dataset(tgt_path)[tgt_var]
+        .isel(isel)
+        .rename(latitude="lat", longitude="lon")
+    )
+    inp = xr.open_dataset(inp_path)[inp_var].isel(isel)
+
+    return {"input": inp, "tgt": tgt}

@@ -280,6 +280,8 @@ class LazyXrDataset(XrDataset):
         """
         self.return_coords = False
         self.postpro_fn = postpro_fn
+        print("DOMAIN LIMITS:", domain_limits)
+        print("DATA VARS:", das.keys())
         self.da = {k: v.sel(**(domain_limits)) for (k, v) in das.items()}
         self._check_dims_and_coords()
         self.patch_dims = patch_dims
