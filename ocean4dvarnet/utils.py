@@ -32,9 +32,6 @@ Functions:
     best_ckpt: Retrieve the best checkpoint from an experiment directory.
     load_cfg: Load configuration files for an experiment.
 """
-
-
-
 from pathlib import Path
 from omegaconf import OmegaConf
 import numpy as np
@@ -45,6 +42,7 @@ import xrft
 import torch
 import xarray as xr
 import matplotlib.pyplot as plt
+
 
 def pipe(inp, fns):
     """
@@ -109,6 +107,7 @@ def half_lr_adam(lit_mod, lr):
         ],
     )
 
+
 def cosanneal_lr_adam_base(lit_mod, lr, T_max=100, weight_decay=0.):
     """
     Configure an Adam optimizer with cosine annealing learning rate scheduling.
@@ -133,6 +132,7 @@ def cosanneal_lr_adam_base(lit_mod, lr, T_max=100, weight_decay=0.):
             opt, T_max=T_max
         ),
     }
+
 
 def cosanneal_lr_adam(lit_mod, lr, T_max=100, weight_decay=0.):
     """
@@ -688,3 +688,24 @@ def load_cfg(xp_dir):
         return None, None
 
     return cfg, OmegaConf.select(hydra_cfg, "runtime.choices.xp")
+
+
+def load_sea_level_anomaly(tgt_path, inp_path, tgt_var="sla", inp_var="sla"):
+    def rename_coords(ds):
+        rename = dict()
+
+        if 'latitude' in ds.coords and 'lat' not in ds.coords:
+            rename['latitude'] = 'lat'
+        if 'longitude' in ds.coords and 'lon' not in ds.coords:
+            rename['longitude'] = 'lon'
+
+        return ds.rename(rename)
+
+    tgt = rename_coords(
+        xr.open_dataset(tgt_path)
+        .rename(latitude="lat", longitude="lon")
+    )[tgt_var]
+
+    inp = rename_coords(xr.open_dataset(inp_path))[inp_var]
+
+    return {"input": inp, "tgt": tgt}

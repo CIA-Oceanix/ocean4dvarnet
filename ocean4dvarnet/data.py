@@ -1,9 +1,9 @@
 """
 This module provides data handling utilities for 4D-VarNet models.
 
-It includes classes and functions for creating datasets, augmenting data, 
-managing data loading pipelines, and reconstructing data from patches. 
-These utilities are designed to work seamlessly with PyTorch and xarray, 
+It includes classes and functions for creating datasets, augmenting data,
+managing data loading pipelines, and reconstructing data from patches.
+These utilities are designed to work seamlessly with PyTorch and xarray,
 enabling efficient data preprocessing and loading for machine learning tasks.
 
 Classes:
@@ -27,11 +27,14 @@ Key Features:
 
 import itertools
 import functools as ft
+import logging
 from collections import namedtuple
 import pytorch_lightning as pl
 import numpy as np
 import torch.utils.data
 import xarray as xr
+
+logger = logging.getLogger(__name__)
 
 TrainingItem = namedtuple('TrainingItem', ['input', 'tgt'])
 
@@ -200,7 +203,7 @@ class XrDataset(torch.utils.data.Dataset):
 
         Args:
             batches (list): List of patches (torch tensor) corresponding to batches without shuffle.
-            weight (np.ndarray, optional): Tensor of size patch_dims corresponding to the weight of a prediction 
+            weight (np.ndarray, optional): Tensor of size patch_dims corresponding to the weight of a prediction
                 depending on the position on the patch (default to ones everywhere). Overlapping patches will
                 be averaged with weighting.
 
@@ -233,13 +236,13 @@ class XrDataset(torch.utils.data.Dataset):
         das = [xr.DataArray(it.numpy(), dims=dims, coords=co.coords)
                for it, co in zip(items, coords)]
 
-        da_shape = dict(zip(coords[0].dims, self.da.shape[-len(coords[0].dims):]))
+        da_shape = dict(zip(coords[0].dims, self._get_da_sample().shape[-len(coords[0].dims):]))
         new_shape = dict(zip(new_dims, items[0].shape[:len(new_dims)]))
 
         rec_da = xr.DataArray(
             np.zeros([*new_shape.values(), *da_shape.values()]),
             dims=dims,
-            coords={d: self.da[d] for d in self.patch_dims}
+            coords={d: self._get_da_sample()[d] for d in self.patch_dims}
         )
         count_da = xr.zeros_like(rec_da)
 
@@ -248,6 +251,172 @@ class XrDataset(torch.utils.data.Dataset):
             count_da.loc[da.coords] = count_da.sel(da.coords) + w
 
         return rec_da / count_da
+
+    def _get_da_sample(self):
+        return self.da
+
+
+class LazyXrDataset(XrDataset):
+    """
+    A PyTorch Dataset loading data in lazy mode ("on the fly").
+    If the sampled patch is smaller than the indicated patch dimensions
+    (e. g. a patch sampled at the edge of the domain), the user can
+    complete with nan or periodic repetition in order to return a patch
+    of the specified dimension.
+
+    Attributes: see XrDataset.
+    """
+
+    def __init__(
+        self, das, patch_dims, domain_limits=None, strides=None,
+        postpro_fn=None, **kwargs,
+    ):
+        """
+        Initialize the LazyXrDataset.
+
+        Args:
+            das (dict): dictionary containing xr.DataArray to be used.
+            patch_dims (dict): da dimension and sizes of patches to extract.
+            domain_limits (dict, optional): da dimension slices of domain, to
+                Limits for selecting a subset of the domain. for patch
+                extractions
+            strides (dict, optional): dims to strides size for patch extraction.
+                (default to one)
+            postpro_fn (callable, optional): A function for post-processing
+                extracted patches.
+            edges (dict): if the theoretical coverage of a patch exceeds
+                the domain's limits, this parameter can fill the "blank"
+                area of the patch by repeating the other side of the
+                domain ("periodic") or fill the gap with `nan` values
+                ("fill_nan")).
+                Example: `edges=dict(lat="fill_nan", lon="periodic")`.
+        """
+        self.return_coords = False
+        self.postpro_fn = postpro_fn
+        self.da = {k: v.sel(**(domain_limits)) for (k, v) in das.items()}
+        self._check_dims_and_coords()
+        self.patch_dims = patch_dims
+        self.strides = strides or {}
+        ref = next(iter(self.da))
+        da_dims = dict(zip(self.da[ref].dims, self.da[ref].shape))
+        self.ds_size = {
+            dim: max((da_dims[dim] - patch_dims[dim]) // self.strides.get(dim, 1) + 1, 0)
+            for dim in patch_dims
+        }
+
+        # If an edge-behaviour is specified for a dimension, increment
+        # by one self.ds_size along this dimension
+        self.edges = kwargs.get('edges', dict())
+        for dim, behaviour in self.edges.items():
+            if behaviour not in ('periodic', 'fill_nan'):
+                raise ValueError(
+                    f"edges[{dim}] must be either 'periodic' or 'fill_nan', "
+                    + f"got {behaviour}"
+                )
+
+            if (da_dims[dim] - patch_dims[dim]) % strides[dim] != 0:
+                self.ds_size[dim] += 1
+
+    def __getitem__(self, item):
+        """
+        Get a specific patch by index.
+
+        Args:
+            item (int): Index of the patch.
+
+        Returns:
+            Patch data or coordinates, depending on the mode.
+        """
+        sl = {}
+        _zip = zip(
+            self.ds_size.keys(),
+            np.unravel_index(item, tuple(self.ds_size.values())),
+        )
+
+        for dim, idx in _zip:
+            sl[dim] = slice(
+                self.strides.get(dim, 1) * idx,
+                self.strides.get(dim, 1) * idx + self.patch_dims[dim]
+            )
+
+        ref = next(iter(self.da))
+        sliced_domain = self.da[ref].isel(**sl)
+
+        if self.return_coords:
+            item = sliced_domain
+            return item.coords.to_dataset()[list(self.patch_dims)]
+
+        das = {k: self.da[k].isel(**sl) for k in self.da}
+
+        # Handling edge behaviour
+        for dim, behaviour in self.edges.items():
+            if len(sliced_domain) >= self.patch_dims[dim]:
+                continue
+            offset = self.patch_dims[dim] - len(sliced_domain[dim])
+
+            if behaviour == 'periodic':
+                sl[dim] = slice(
+                    sl[dim].start - offset, sl[dim].stop - offset,
+                )
+
+                for var in das:
+                    das[var] = (
+                        self.da[var]
+                        .isel(time=sl['time'])  # TODO How to make it generic?
+                        .roll({dim: -offset})
+                        .assign_coords({dim: lambda x: x[dim] - offset})
+                        .sortby(dim)
+                        .isel({k: v for k, v in sl.items() if k != 'time'})
+                    )
+            elif behaviour == 'fill_nan':
+                for var in das:
+                    das[var] = das[var].pad(
+                        pad_width=dict({dim: (0, offset)}),
+                        mode='constant',
+                        constant_values=np.nan,
+                    )
+
+        item = (
+            xr.Dataset(
+                data_vars=das,
+                coords=next(iter(das.values())).coords,
+            )
+            .to_dataarray()
+            .sortby('variable')
+            .data
+            .astype(np.float32)
+        )
+
+        if self.postpro_fn is not None:
+            return self.postpro_fn(item)
+        return item
+
+    def _check_dims_and_coords(self):
+        """
+        Check that `self.da`'s xr.DataArrays all share the same dims and
+        coords.
+        """
+        ref = next(iter(self.da))
+        ref_val = self.da[ref]
+
+        for k, v in self.da.items():
+            if ref == k:
+                continue
+
+            if ref_val.dims != v.dims:
+                raise ValueError(
+                    "All provided xr.DataArray must share the same dimensions "
+                    + f"({ref} != {k})"
+                )
+
+            if not ref_val.coords.equals(v.coords):
+                raise ValueError(
+                    "All provided xr.DataArray must share the same coordinates "
+                    + f"({ref} != {k})"
+                )
+
+    def _get_da_sample(self):
+        return self.da[next(iter(self.da))]
 
 
 class XrConcatDataset(torch.utils.data.ConcatDataset):
@@ -392,7 +561,7 @@ class BaseDataModule(pl.LightningDataModule):
         """
         if self._norm_stats is None:
             self._norm_stats = self.train_mean_std()
-            print("Norm stats", self._norm_stats)
+            logger.info(f"Normalisation parameters: {self._norm_stats}")
         return self._norm_stats
 
     def train_mean_std(self, variable='tgt'):
@@ -471,6 +640,152 @@ class BaseDataModule(pl.LightningDataModule):
             DataLoader: Testing DataLoader.
         """
         return torch.utils.data.DataLoader(self.test_ds, shuffle=False, **self.dl_kw)
+
+
+class LazyDataModule(BaseDataModule):
+    """
+    A data module loading datasets in lazy mode ("on the fly").
+
+    Attributes: see BaseDataModule.
+    """
+    def __init__(self, *args, **kwargs):
+        """
+        See BaseDataModule.__init__.
+
+        Differences are:
+        - `input_da` must contain a xr.Dataset-valued dictionary;
+        - `norm_stats` must be indicated, otherwise a TypeError will be
+            raised.
+        """
+        super().__init__(*args, **kwargs)
+
+        if not isinstance(self.input_da, dict):
+            raise TypeError(
+                "Argument `input_da` is expected to be a `dict`, "
+                + f"got `{type(self.input_da)}`."
+            )
+
+        if self._norm_stats is None:
+            raise TypeError(
+                "Normalisation parameters (argument `norm_stats`) must "
+                + "be provided in lazy loading"
+            )
+
+    def setup(self, stage='test'):
+        """
+        Set up the datasets for training, validation, and testing.
+
+        Args:
+            stage (str, optional): Stage of the setup ('train', 'val', 'test').
+        """
+        self.train_ds = LazyXrDataset(
+            {k: v.sel(self.domains['train']) for (k, v) in self.input_da.items()},
+            **self.xrds_kw["train"], postpro_fn=self.post_fn('train'),
+        )
+        if self.aug_kw:
+            self.train_ds = AugmentedDataset(self.train_ds, **self.aug_kw)
+
+        self.val_ds = LazyXrDataset(
+            {k: v.sel(self.domains['val']) for (k, v) in self.input_da.items()},
+            **self.xrds_kw["val"], postpro_fn=self.post_fn('val'),
+        )
+        self.test_ds = LazyXrDataset(
+            {k: v.sel(self.domains['test']) for (k, v) in self.input_da.items()},
+            **self.xrds_kw["test"], postpro_fn=self.post_fn('test'),
+        )
+
+    def norm_stats(self, phase=None):
+        """
+        Compute or retrieve normalization statistics (mean, std).
+
+        Returns:
+            tuple: Normalization statistics (mean, std).
+        """
+        if self._norm_stats is None:
+            self._norm_stats = self.train_mean_std()
+            logger.info(f"Normalisation parameters: {self._norm_stats}")
+        return self._norm_stats[phase]
+
+    def post_fn(self, phase=None):
+        """
+        Create a post-processing function for normalizing data depending
+        on the dataset (training, validation or test dataset).
+
+        Returns:
+            callable: Post-processing function.
+        """
+        m, s = self.norm_stats(phase)
+        def normalize(item): return (item - m) / s
+        return ft.partial(ft.reduce, lambda i, f: f(i), [
+            TrainingItem._make,
+            lambda item: item._replace(tgt=normalize(item.tgt)),
+            lambda item: item._replace(input=normalize(item.input)),
+        ])
+
+
+class NoisyLazyDataModule(LazyDataModule):
+    """
+    A data module that adds noise to input data if specified.
+
+    The noise added to the training data is a standardised gaussian noise
+    scaled by a provided noise level.
+    The noise added to the validation data is uniformly drawn from the
+    interval [-n, n] where n is the noise level.
+
+    Attributes: see LazyDataModule.
+        noise (float): Noise level to apply.
+    """
+    def __init__(self, *args, **kwargs):
+        """
+        Initialize the NoisyLazyDataModule.
+
+        Args:
+            input_da (xarray.DataArray): The input data array.
+            domains (dict): Dictionary of domain splits (train, val, test).
+            xrds_kw (dict): Keyword arguments for XrDataset.
+            dl_kw (dict): Keyword arguments for DataLoader.
+            aug_kw (dict, optional): Keyword arguments for AugmentedDataset.
+            norm_stats (tuple, optional): Normalization statistics (mean, std).
+            noise (float, optional): Noise level to be added to the input.
+        """
+        super().__init__(*args, **kwargs)
+        self._rng = np.random.default_rng()
+        self.noise = kwargs.get('noise')  # in meters
+
+        if self.noise:
+            logging.info(
+                f"Adding noise level of {self.noise} m to input data"
+            )
+        else:
+            logging.warning(
+                "You are using NoisyLazyDataModule and yet, you did not "
+                + "provide a noise level!"
+            )
+
+    def post_fn(self, phase=None):
+        m, s = self.norm_stats(phase)
+
+        def add_noise(x):
+            nl = self.noise
+
+            if not nl:
+                return x  # identity if no noise
+
+            if phase == 'train':
+                scale = self._rng.uniform(0., nl)
+                noise = scale * self._rng.normal(0., 1., x.shape)
+            elif phase == 'val':
+                noise = self._rng.uniform(-nl, nl, x.shape)
+            else:
+                noise = 0.
+
+            return x + noise.astype(np.float32)
+
+        return ft.partial(ft.reduce, lambda i, f: f(i), [
+            TrainingItem._make,
+            lambda item: item._replace(tgt=(item.tgt - m) / s),
+            lambda item: item._replace(input=(add_noise(item.input) - m) / s),
+        ])
 
 
 class ConcatDataModule(BaseDataModule):

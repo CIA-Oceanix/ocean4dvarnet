@@ -7,7 +7,9 @@ Functions:
 """
 
 import torch
+import logging
 torch.set_float32_matmul_precision('high')
+logger = logging.getLogger(__name__)
 
 
 def base_training(trainer, dm, lit_mod, ckpt=None):
@@ -24,9 +26,7 @@ def base_training(trainer, dm, lit_mod, ckpt=None):
         None
     """
     if trainer.logger is not None:
-        print()
-        print("Logdir:", trainer.logger.log_dir)
-        print()
+        logger.info(f"Log directory: {trainer.logger.log_dir}")
 
     trainer.fit(lit_mod, datamodule=dm, ckpt_path=ckpt)
     trainer.test(lit_mod, datamodule=dm, ckpt_path='best')
@@ -53,9 +53,7 @@ def multi_dm_training(
         None
     """
     if trainer.logger is not None:
-        print()
-        print("Logdir:", trainer.logger.log_dir)
-        print()
+        logger.info(f"Log directory: {trainer.logger.log_dir}")
 
     trainer.fit(lit_mod, datamodule=dm, ckpt_path=ckpt)
 

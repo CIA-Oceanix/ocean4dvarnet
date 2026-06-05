@@ -7,6 +7,7 @@ using deep learning and PyTorch Lightning.
 """
 
 from pathlib import Path
+import omegaconf
 import pandas as pd
 import pytorch_lightning as pl
 import kornia.filters as kfilts
@@ -14,6 +15,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from typing import Optional
+import torch
 
 
 # ===================================================
@@ -32,10 +34,11 @@ class LitModel(pl.LightningModule):
         pre_metric_fn (callable): Preprocessing function for metrics.
         norm_stats (tuple): Normalization statistics (mean, std).
         persist_rw (bool): Whether to persist reconstruction weight as a buffer.
+        nanlim (float): Threshold of "nan" below which, a batch is discarded.
     """
 
     def __init__(
-        self, solver, rec_weight, opt_fn, test_metrics=None, pre_metric_fn=None, norm_stats=None, persist_rw=True
+        self, solver, rec_weight, opt_fn, test_metrics=None, pre_metric_fn=None, norm_stats=None, persist_rw=True, nanlim=.5
     ):
         """
         Initialize the Lit4dVarNet module.
@@ -57,6 +60,7 @@ class LitModel(pl.LightningModule):
         self.opt_fn = opt_fn
         self.metrics = test_metrics or {}
         self.pre_metric_fn = pre_metric_fn or (lambda x: x)
+        self.nanlim = nanlim
 
     @property
     def norm_stats(self):
@@ -141,7 +145,7 @@ class LitModel(pl.LightningModule):
         Returns:
             tuple: Loss and output tensor.
         """
-        if self.training and batch.tgt.isfinite().float().mean() < 0.9:
+        if self.training and batch.tgt.isfinite().float().mean() < self.nanlim:
             return None, None
 
         out = self(batch=batch)
@@ -163,12 +167,15 @@ class LitModel(pl.LightningModule):
         loss = self.weighted_mse(out - batch.tgt, self.rec_weight)
         grad_loss = self.weighted_mse(kfilts.sobel(out) - kfilts.sobel(batch.tgt), self.rec_weight)
 
+        if isinstance(self.norm_stats, omegaconf.dictconfig.DictConfig):
+            std = self.norm_stats[phase][1]
+        else:
+            std = self.norm_stats[1]
+
         with torch.no_grad():
-            self.log(
-                f"{phase}_mse", 10000 * loss * self.norm_stats[1] ** 2, prog_bar=True, on_step=False, on_epoch=True
-            )
-            self.log(f"{phase}_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
-            self.log(f"{phase}_gloss", grad_loss, prog_bar=True, on_step=False, on_epoch=True)
+            self.log(f"{phase}_mse", 10000 * loss * std**2, prog_bar=True, on_step=False, on_epoch=True)
+            self.log(f"{phase}_loss", loss, prog_bar=False, on_step=False, on_epoch=True)
+            self.log(f"{phase}_gloss", grad_loss, prog_bar=False, on_step=False, on_epoch=True)
 
         return 50 * loss + 1000 * grad_loss
 
@@ -192,7 +199,11 @@ class LitModel(pl.LightningModule):
         if batch_idx == 0:
             self.test_data = []
         out = self(batch=batch)
-        m, s = self.norm_stats
+
+        if isinstance(self.norm_stats, omegaconf.dictconfig.DictConfig):
+            m, s = self.norm_stats['test']
+        else:
+            m, s = self.norm_stats
 
         self.test_data.append(
             torch.stack(
@@ -268,6 +279,105 @@ class Lit4dVarNet(LitModel):
 
 class GradSolver(nn.Module):
     """
+    A gradient-based solver for optimization in 4D-VarNet.
+
+    Attributes:
+        prior_cost (nn.Module): The prior cost function.
+        obs_cost (nn.Module): The observation cost function.
+        grad_mod (nn.Module): The gradient modulation model.
+        n_step (int): Number of optimization steps.
+        lr_grad (float): Learning rate for gradient updates.
+        lbd (float): Regularization parameter.
+    """
+
+    def __init__(self, prior_cost, obs_cost, grad_mod, n_step, lr_grad=0.2, lbd=1.0, **kwargs):
+        """
+        Initialize the GradSolver.
+
+        Args:
+            prior_cost (nn.Module): The prior cost function.
+            obs_cost (nn.Module): The observation cost function.
+            grad_mod (nn.Module): The gradient modulation model.
+            n_step (int): Number of optimization steps.
+            lr_grad (float, optional): Learning rate for gradient updates. Defaults to 0.2.
+            lbd (float, optional): Regularization parameter. Defaults to 1.0.
+        """
+        super().__init__()
+        self.prior_cost = prior_cost
+        self.obs_cost = obs_cost
+        self.grad_mod = grad_mod
+
+        self.n_step = n_step
+        self.lr_grad = lr_grad
+        self.lbd = lbd
+
+        self._grad_norm = None
+
+    def init_state(self, batch, x_init=None):
+        """
+        Initialize the state for optimization.
+
+        Args:
+            batch (dict): Input batch containing data.
+            x_init (torch.Tensor, optional): Initial state. Defaults to None.
+
+        Returns:
+            torch.Tensor: Initialized state.
+        """
+        if x_init is not None:
+            return x_init
+
+        return batch.input.nan_to_num().detach().requires_grad_(True)
+
+    def solver_step(self, state, batch, step):
+        """
+        Perform a single optimization step.
+
+        Args:
+            state (torch.Tensor): Current state.
+            batch (dict): Input batch containing data.
+            step (int): Current optimization step.
+
+        Returns:
+            torch.Tensor: Updated state.
+        """
+        var_cost = self.prior_cost(state) + self.lbd**2 * self.obs_cost(state, batch)
+        grad = torch.autograd.grad(var_cost, state, create_graph=True)[0]
+
+        gmod = self.grad_mod(grad)
+        state_update = (
+            1 / (step + 1) * gmod
+            + self.lr_grad * (step + 1) / self.n_step * grad
+        )
+
+        return state - state_update
+
+    def forward(self, batch):
+        """
+        Perform the forward pass of the solver.
+
+        Args:
+            batch (dict): Input batch containing data.
+
+        Returns:
+            torch.Tensor: Final optimized state.
+        """
+        with torch.set_grad_enabled(True):
+            state = self.init_state(batch)
+            self.grad_mod.reset_state(batch.input)
+
+            for step in range(self.n_step):
+                state = self.solver_step(state, batch, step=step)
+                if not self.training:
+                    state = state.detach().requires_grad_(True)
+
+            if not self.training:
+                state = self.prior_cost.forward_ae(state)
+        return state
+
+
+class DiffusionGradSolver(GradSolver):
+    """
     Gradient-based solver for optimization within unrolled architectures.
 
     Attributes:
@@ -305,7 +415,7 @@ class GradSolver(nn.Module):
         **kwargs,
     ):
         """
-        Initialize the GradSolver.
+        Initialize the DiffusionGradSolver.
 
         Args:
             prior_cost (nn.Module): The prior cost function.
@@ -317,19 +427,18 @@ class GradSolver(nn.Module):
             input_grad_update (str, optional): Quantities added for updating the input gradient. Defaults to "state".
             std_init (float, optional): Standard deviation for initializing the state. Defaults to 0.1.
         """
-        super().__init__()
-        self.prior_cost = prior_cost
-        self.obs_cost = obs_cost
-        self.grad_mod = grad_mod
-
-        self.n_step = n_step
-        self.lr_grad = lr_grad
-        self.lbd = lbd
+        super().__init__(
+            prior_cost=prior_cost,
+            obs_cost=obs_cost,
+            grad_mod=grad_mod,
+            n_step=n_step,
+            lr_grad=lr_grad,
+            lbd=lbd,
+            **kwargs,
+        )
 
         self.input_grad_update = input_grad_update
         self.std_init = std_init
-
-        self._grad_norm = None
 
     def init_state(self, batch, x_init=None):
         """
@@ -648,6 +757,63 @@ class GradModelWithCondition(torch.nn.Module):
 # ===================================================
 # Observation Cost and Prior Cost
 # ====================================================
+
+class GenericAEPriorCost(torch.nn.Module):
+    """
+    A prior cost model using bilinear autoencoders.
+
+    Attributes:
+        bilin_quad (bool): Whether to use bilinear quadratic terms.
+        conv_in (nn.Conv2d): Convolutional layer for input.
+        conv_hidden (nn.Conv2d): Convolutional layer for hidden states.
+        bilin_1 (nn.Conv2d): Bilinear layer 1.
+        bilin_21 (nn.Conv2d): Bilinear layer 2 (part 1).
+        bilin_22 (nn.Conv2d): Bilinear layer 2 (part 2).
+        conv_out (nn.Conv2d): Convolutional layer for output.
+        down (nn.Module): Downsampling layer.
+        up (nn.Module): Upsampling layer.
+    """
+
+    def __init__(self, model_ae):
+        """
+        Initialize the BilinAEPriorCost module.
+
+        Args:
+            dim_in (int): Number of input dimensions.
+            dim_hidden (int): Number of hidden dimensions.
+            kernel_size (int, optional): Kernel size for convolutions. Defaults to 3.
+            downsamp (int, optional): Downsampling factor. Defaults to None.
+            bilin_quad (bool, optional): Whether to use bilinear quadratic terms. Defaults to True.
+        """
+        super().__init__()
+
+        self.model_ae = model_ae 
+
+    def forward_ae(self, x):
+        """
+        Perform the forward pass through the autoencoder.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output tensor after passing through the autoencoder.
+        """
+        timesteps = torch.zeros((x.shape[0],), device=x.device, dtype=torch.long)
+        return self.model_ae.predict(x,timesteps=timesteps, extra=[])
+
+    def forward(self, state):
+        """
+        Compute the prior cost using the autoencoder.
+
+        Args:
+            state (torch.Tensor): The current state tensor.
+
+        Returns:
+            torch.Tensor: The computed prior cost.
+        """
+        return torch.nn.functional.mse_loss(state, self.forward_ae(state))
+
 
 class BaseObsCost(nn.Module):
     """
