@@ -27,11 +27,14 @@ Key Features:
 
 import itertools
 import functools as ft
+import logging
 from collections import namedtuple
 import pytorch_lightning as pl
 import numpy as np
 import torch.utils.data
 import xarray as xr
+
+logger = logging.getLogger(__name__)
 
 TrainingItem = namedtuple('TrainingItem', ['input', 'tgt'])
 
@@ -280,8 +283,6 @@ class LazyXrDataset(XrDataset):
         """
         self.return_coords = False
         self.postpro_fn = postpro_fn
-        print("DOMAIN LIMITS:", domain_limits)
-        print("DATA VARS:", das.keys())
         self.da = {k: v.sel(**(domain_limits)) for (k, v) in das.items()}
         self._check_dims_and_coords()
         self.patch_dims = patch_dims
@@ -551,7 +552,7 @@ class BaseDataModule(pl.LightningDataModule):
         """
         if self._norm_stats is None:
             self._norm_stats = self.train_mean_std()
-            print("Norm stats", self._norm_stats)
+            logger.info(f"Normalisation parameters: {self._norm_stats}")
         return self._norm_stats
 
     def train_mean_std(self, variable='tgt'):
@@ -689,7 +690,7 @@ class LazyDataModule(BaseDataModule):
         """
         if self._norm_stats is None:
             self._norm_stats = self.train_mean_std()
-            print("Norm stats", self._norm_stats)
+            logger.info(f"Normalisation parameters: {self._norm_stats}")
         return self._norm_stats[phase]
 
 
