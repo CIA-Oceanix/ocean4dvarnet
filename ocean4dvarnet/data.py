@@ -723,6 +723,71 @@ class LazyDataModule(BaseDataModule):
         ])
 
 
+class NoisyLazyDataModule(LazyDataModule):
+    """
+    A data module that adds noise to input data if specified.
+
+    The noise added to the training data is a standardised gaussian noise
+    scaled by a provided noise level.
+    The noise added to the validation data is uniformly drawn from the
+    interval [-n, n] where n is the noise level.
+
+    Attributes: see LazyDataModule.
+        noise (float): Noise level to apply.
+    """
+    def __init__(self, *args, **kwargs):
+        """
+        Initialize the NoisyLazyDataModule.
+
+        Args:
+            input_da (xarray.DataArray): The input data array.
+            domains (dict): Dictionary of domain splits (train, val, test).
+            xrds_kw (dict): Keyword arguments for XrDataset.
+            dl_kw (dict): Keyword arguments for DataLoader.
+            aug_kw (dict, optional): Keyword arguments for AugmentedDataset.
+            norm_stats (tuple, optional): Normalization statistics (mean, std).
+            noise (float, optional): Noise level to be added to the input.
+        """
+        super().__init__(*args, **kwargs)
+        self._rng = np.random.default_rng()
+        self.noise = kwargs.get('noise')  # in meters
+
+        if self.noise:
+            logging.info(
+                f"Adding noise level of {self.noise} m to input data"
+            )
+        else:
+            logging.warning(
+                "You are using NoisyLazyDataModule and yet, you did not "
+                + "provide a noise level!"
+            )
+
+    def post_fn(self, phase=None):
+        m, s = self.norm_stats(phase)
+
+        def add_noise(x):
+            nl = self.noise
+
+            if not nl:
+                return x  # identity if no noise
+
+            if phase == 'train':
+                scale = self._rng.uniform(0., nl)
+                noise = scale * self._rng.normal(0., 1., x.shape)
+            elif phase == 'val':
+                noise = self._rng.uniform(-nl, nl, x.shape)
+            else:
+                noise = 0.
+
+            return x + noise.astype(np.float32)
+
+        return ft.partial(ft.reduce, lambda i, f: f(i), [
+            TrainingItem._make,
+            lambda item: item._replace(tgt=(item.tgt - m) / s),
+            lambda item: item._replace(input=(add_noise(item.input) - m) / s),
+        ])
+
+
 class ConcatDataModule(BaseDataModule):
     """A data module for concatenating datasets from multiple domains."""
 
