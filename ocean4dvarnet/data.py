@@ -257,6 +257,16 @@ class XrDataset(torch.utils.data.Dataset):
 
 
 class LazyXrDataset(XrDataset):
+    """
+    A PyTorch Dataset loading data in lazy mode ("on the fly").
+    If the sampled patch is smaller than the indicated patch dimensions
+    (e. g. a patch sampled at the edge of the domain), the user can
+    complete with nan or periodic repetition in order to return a patch
+    of the specified dimension.
+
+    Attributes: see XrDataset.
+    """
+
     def __init__(
         self, das, patch_dims, domain_limits=None, strides=None,
         postpro_fn=None, **kwargs,
@@ -265,7 +275,7 @@ class LazyXrDataset(XrDataset):
         Initialize the LazyXrDataset.
 
         Args:
-            das (dict): xr.DataArray to be used.
+            das (dict): dictionary containing xr.DataArray to be used.
             patch_dims (dict): da dimension and sizes of patches to extract.
             domain_limits (dict, optional): da dimension slices of domain, to
                 Limits for selecting a subset of the domain. for patch
@@ -306,7 +316,6 @@ class LazyXrDataset(XrDataset):
 
             if (da_dims[dim] - patch_dims[dim]) % strides[dim] != 0:
                 self.ds_size[dim] += 1
-
 
     def __getitem__(self, item):
         """
@@ -634,7 +643,11 @@ class BaseDataModule(pl.LightningDataModule):
 
 
 class LazyDataModule(BaseDataModule):
+    """
+    A data module loading datasets in lazy mode ("on the fly").
 
+    Attributes: see BaseDataModule.
+    """
     def __init__(self, *args, **kwargs):
         """
         See BaseDataModule.__init__.
@@ -692,7 +705,6 @@ class LazyDataModule(BaseDataModule):
             self._norm_stats = self.train_mean_std()
             logger.info(f"Normalisation parameters: {self._norm_stats}")
         return self._norm_stats[phase]
-
 
     def post_fn(self, phase=None):
         """
